@@ -1,17 +1,20 @@
 # TreeOrg Tutorial: Setting Up a Custom Project with OpenRemote
 
-Welcome to the TreeOrg tutorial! This guide will help you set up a custom project using OpenRemote and customize it to fit the needs of our fictional company, TreeOrg.
-
+Welcome to the TreeOrg tutorial! In this guide, we will show you how to set up and customize a project using OpenRemote to meet the specific needs of TreeOrg, a forward-thinking company dedicated to urban forestry management.
 ## Table of Contents
 1. [Introduction](#introduction)
-2. [Setting Up the Development Environment](#setting-up-the-development-environment)
+2. [Setting Up the Development Environment](#step-2-setting-up-your-development-environment)
 3. [Creating the TreeOrg Realm](#creating-the-treeorg-realm)
 4. [Customizing TreeOrg](#customizing-treeorg)
 5. [Advanced Topics](#advanced-topics)
 6. [FAQ and Troubleshooting](#faq-and-troubleshooting)
 
 ## Introduction
+TreeOrg is an innovative company specializing in the maintenance and care of large urban trees in Eindhoven. Utilizing advanced IoT sensors, TreeOrg monitors various environmental parameters of city trees, such as soil moisture and temperature. The data collected by these sensors is crucial in determining when and where service workers need to be dispatched to water and maintain the trees.
 
+However, managing the logistics of routing service personnel efficiently from one tree to another poses a significant challenge. As the company grows and the number of trees under management increases, the need for an automated solution to optimize service routes has become apparent. TreeOrg seeks to integrate their system with navigation tools like Google Maps to enable their workers to find the targeted trees quickly and follow the most efficient routes possible.
+
+This tutorial will guide you through setting up a custom project in OpenRemote that not only captures and processes data from IoT sensors but also interfaces with navigation software to streamline the workflow of field personnel. By the end of this guide, you will have a robust system designed to enhance the operational efficiency of tree servicing tasks in urban environments.
 ## Prerequisites
 Before starting, ensure you have the following installed:
 - [Git](https://git-scm.com/)
@@ -221,6 +224,194 @@ By following these steps, you have successfully set up the TreeOrg environment. 
 
 ## Customizing TreeOrg
 
+### Adding Assets
+
+In the TreeOrg project, creating custom assets allows us to model real-world entities and their properties within our system. Here, we'll go through the process of creating a `TreeAsset`, which represents a tree equipped with various sensors.
+
+#### Creating TreeAsset
+
+To create a `TreeAsset`, start by navigating to the `model/src/main/java/org/openremote/model` folder and creating a package named `treeorg`. Inside this package, you'll create the `TreeAsset` class that extends `Asset<TreeAsset>` from OpenRemote's model framework.
+
+Here is a brief overview and the code for the `TreeAsset` class:
+
+This TreeAsset class includes attributes such as soil temperature and water level, which are essential for monitoring the health and maintenance needs of a tree. These attributes are set to be read-only to prevent unauthorized modification. The tree type, route ID, and priority can be used to manage maintenance schedules and routing for care personnel based on the tree's conditions and needs.
+
+By extending the Asset<TreeAsset>, this custom asset leverages the existing framework capabilities like handling names, locations, and other standard properties, allowing for easy integration and management within the OpenRemote environment.
+
+```java
+@Entity
+public class TreeAsset extends Asset<TreeAsset> {
+
+    // Attributes that hold sensor data and tree information
+    public static final AttributeDescriptor<Double> SOIL_TEMPERATURE = new AttributeDescriptor<>(
+        "soilTemperature", ValueType.NUMBER,
+        new MetaItem<>(MetaItemType.READ_ONLY)
+    ).withUnits(UNITS_CELSIUS).withFormat(ValueFormat.NUMBER_1_DP());
+
+    public static final AttributeDescriptor<Integer> WATER_LEVEL = new AttributeDescriptor<>(
+        "waterLevel", ValueType.POSITIVE_INTEGER,
+        new MetaItem<>(MetaItemType.READ_ONLY)
+    );
+
+    public static final AttributeDescriptor<String> TREE_TYPE = new AttributeDescriptor<>(
+        "treeType", ValueType.TEXT
+    ).withOptional(true);
+
+    public static final AttributeDescriptor<Integer> ROUTE_ID = new AttributeDescriptor<>(
+        "routeId", ValueType.POSITIVE_INTEGER,
+        new MetaItem<>(MetaItemType.READ_ONLY, true)
+    );
+
+    public static final AttributeDescriptor<Boolean> PRIORITY = new AttributeDescriptor<>(
+        "priority", ValueType.BOOLEAN,
+        new MetaItem<>(MetaItemType.READ_ONLY, true)
+    );
+
+    // Descriptor for use in the manager UI and other parts of the system
+    public static final AssetDescriptor<TreeAsset> DESCRIPTOR = new AssetDescriptor<>(
+        "tree", "396d22", TreeAsset.class
+    );
+
+    protected TreeAsset() {
+        // Constructor for JPA and Jackson
+    }
+
+    public TreeAsset(String name) {
+        super(name);
+    }
+
+    // Getter methods to access the attributes
+    public Optional<Double> getTemperature() {
+        return getAttributes().getValue(SOIL_TEMPERATURE);
+    }
+    public Optional<Integer> getWaterLevel() {
+        return getAttributes().getValue(WATER_LEVEL);
+    }
+    public Optional<String> getTreeType() {
+        return getAttributes().getValue(TREE_TYPE);
+    }
+    public Optional<Integer> getRouteId() {
+        return getAttributes().getValue(ROUTE_ID);
+    }
+    public Optional<Boolean> getPriority() {
+        return getAttributes().getValue(PRIORITY);
+    }
+}
+```
+### Integrating TreeAssets into the Realm
+
+With the `TreeAsset` class in place, the next step is to integrate these assets into our realm. In the `TreeOrgManagerSetup` class, we implement logic to create `TreeAssets` around a specific location, such as Eindhoven. Here is a detailed look at the process:
+
+#### TreeOrgManagerSetup Class
+
+The `TreeOrgManagerSetup` class includes methods to create and manage `TreeAssets` dynamically. This implementation results in a group of 100 TreeAssets, all associated under the ThingAsset "TreeOrg Assets". These assets are randomly placed around the city based on the specified base location, creating a realistic deployment pattern.
+
+By utilizing this setup, we can efficiently simulate a realistic environment where each TreeAsset represents a physical tree, equipped with sensors, within the city of Eindhoven. Below is the code and explanation of its functionality:
+
+```java
+public class TreeOrgManagerSetup extends ManagerSetup {
+
+    public static final double BASE_LATITUDE = 51.43848672819468;
+    public static final double BASE_LONGITUDE = 5.47967205919616;
+    public static final double MAX_RADIUS = 4;
+    private static final int BATCH_SIZE = 20;
+
+    public TreeOrgManagerSetup(Container container) {
+        super(container);
+    }
+
+    @Override
+    public void onStart() throws Exception {
+        super.onStart();
+        createAssets();
+    }
+
+    private void createAssets() {
+
+        TreeOrgKeycloakSetup treeOrgKeycloakSetup = setupService.getTaskOfType(TreeOrgKeycloakSetup.class);
+        Realm treeOrgRealm = treeOrgKeycloakSetup.treeOrgRealm;
+
+        // Create a parent asset to group TreeAssets
+        ThingAsset treeOrgAssets = new ThingAsset("TreeOrg Assets");
+        treeOrgAssets.setRealm(treeOrgRealm.getName());
+        treeOrgAssets.setId(UniqueIdentifierGenerator.generateId(treeOrgAssets.getName()));
+        assetStorageService.merge(treeOrgAssets);
+
+        // Create a specified number of TreeAssets and associate them with the parent
+        int amountOfAssets = 100;
+        CreateTreeAssets(amountOfAssets, treeOrgAssets);
+    }
+
+    private void CreateTreeAssets(int amountOfAssets, Asset<?> parentAsset) {
+        List<TreeAsset> assetList = new ArrayList<>();
+
+        for (int i = 0; i < amountOfAssets; i++) {
+            GeoJSONPoint randomLocation = generateRandomLocation();
+            TreeAsset treeAsset = new TreeAsset("TreeAsset " + (i + 1));
+            treeAsset.setParent(parentAsset);
+            treeAsset.getAttributes().addOrReplace(new Attribute<>(Asset.LOCATION, randomLocation));
+
+            // Initialize attributes with random and predefined values
+            Random random = new Random();
+            treeAsset.getAttributes().getOrCreate(TreeAsset.WATER_LEVEL)
+                .setValue(1 + random.nextInt(10000));
+
+            treeAsset.getAttributes().getOrCreate(TreeAsset.SOIL_TEMPERATURE)
+                .setValue(21.0); // Default soil temperature
+
+            treeAsset.getAttributes().getOrCreate(TreeAsset.ROUTE_ID)
+                .setValue(0);
+
+            treeAsset.getAttributes().getOrCreate(TreeAsset.PRIORITY)
+                .setValue(false);
+
+            treeAsset.setId(UniqueIdentifierGenerator.generateId(treeAsset.getName()));
+            assetList.add(treeAsset);
+
+            // Merge assets in batches for efficiency
+            if (assetList.size() >= BATCH_SIZE) {
+                for (TreeAsset asset : assetList) {
+                    assetStorageService.merge(asset);
+                }
+                assetList.clear();
+            }
+        }
+    }
+    
+    private GeoJSONPoint generateRandomLocation() {
+        Random random = new Random();
+        double angle = 2 * Math.PI * random.nextDouble();
+        double radius = MAX_RADIUS * random.nextDouble();
+        double dx = radius * Math.cos(angle);
+        double dy = radius * Math.sin(angle);
+        return calculateNewLocation(dx, dy);
+    }
+
+    private GeoJSONPoint calculateNewLocation(double dx, double dy) {
+        double latitude = BASE_LATITUDE + (dy / 111); // Convert offset to degrees latitude
+        double longitude = BASE_LONGITUDE + (dx / (111 * Math.cos(Math.toRadians(BASE_LATITUDE)))); // Convert offset to degrees longitude
+        return new GeoJSONPoint(longitude, latitude);
+    }
+}
+```
+
+### Updating The Map for Enhanced Visualization
+
+Once our `TreeAssets` are in place, the default map may no longer suffice due to the lack of detailed MBTiles for the Eindhoven area, especially at the appropriate zoom levels. To address this, you will need to update your map data. Comprehensive guidance on acquiring and setting up the appropriate MBTiles can be found in the OpenRemote [Developer Guide: Working on Maps](https://github.com/openremote/openremote/wiki/Developer-Guide%3A-Working-on-maps). After obtaining the `mapdata.mbtiles` file that fits our needs, place it in the `deployment/map` directory. Subsequently, you should update the `mapsettings.json` file to reflect the new map configuration, specifically adding some options for your Realm. This ensures that the map accurately displays the geographic distribution and details of our `TreeAssets`, enhancing the user interface and interaction.
+
+```json
+    {
+    "treeorg" : {
+    "center" : [ 5.4534874, 51.450813 ],
+    "bounds" : [ 5.01, 51.1, 5.9, 51.8 ],
+    "zoom" : 15,
+    "minZoom" : 11,
+    "maxZoom" : 24,
+    "boxZoom" : false,
+    "geocodeUrl" : "https://nominatim.openstreetmap.org"
+  }
+}
+```
 ### Adding Custom Services
 *How to add custom services to the TreeOrg project.*
 
