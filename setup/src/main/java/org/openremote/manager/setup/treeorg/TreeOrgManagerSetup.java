@@ -21,9 +21,9 @@ import static org.openremote.model.value.MetaItemType.RULE_STATE;
 
 public class TreeOrgManagerSetup extends ManagerSetup {
 
-    public static final double BASE_LATITUDE = 51.43848672819468;
-    public static final double BASE_LONGITUDE = 5.47967205919616;
-    public static final double MAX_RADIUS = 4;
+    private static final double BASE_LATITUDE = 51.43848672819468;
+    private static final double BASE_LONGITUDE = 5.47967205919616;
+    private static final double MAX_RADIUS = 4;
     private static final int BATCH_SIZE = 20;
 
     public TreeOrgManagerSetup(Container container) {
