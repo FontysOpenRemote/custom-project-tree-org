@@ -166,10 +166,10 @@ In this section, we will create the TreeOrg setup. This setup will help us manag
          @Override
          public void onStart() throws Exception {
              super.onStart();
-             populateRealm();
+             createAssets();
          }
 
-         private void populateRealm() {
+         private void createAssets() {
              TreeOrgKeycloakSetup treeOrgKeycloakSetup = setupService.getTaskOfType(TreeOrgKeycloakSetup.class);
              Realm treeOrgRealm = treeOrgKeycloakSetup.treeOrgRealm;
 
