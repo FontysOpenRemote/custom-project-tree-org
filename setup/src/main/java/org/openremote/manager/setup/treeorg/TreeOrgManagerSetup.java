@@ -1,6 +1,5 @@
 package org.openremote.manager.setup.treeorg;
 
-import groovyjarjarantlr4.runtime.tree.Tree;
 import org.openremote.container.util.UniqueIdentifierGenerator;
 import org.openremote.manager.setup.ManagerSetup;
 import org.openremote.model.Container;
@@ -69,7 +68,7 @@ public class TreeOrgManagerSetup extends ManagerSetup {
             Random random = new Random();
             int waterLevel = 1 + random.nextInt(10000);
 
-            treeAsset.getAttributes().getOrCreate(treeAsset.WATER_LEVEL)
+            treeAsset.getAttributes().getOrCreate(TreeAsset.WATER_LEVEL)
                     .addMeta(new MetaItem<>(RULE_STATE, true)).addMeta(new MetaItem<>(READ_ONLY, false))
                     .setValue(waterLevel);
 
