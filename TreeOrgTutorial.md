@@ -10,7 +10,6 @@ Welcome to the TreeOrg tutorial! In this guide, we will show you how to set up a
     - [Integrating TreeAssets into the Realm](#integrating-treeassets-into-the-realm)
     - [Updating the Map for Enhanced Visualization](#updating-the-map-for-enhanced-visualization)
     - [Adding Custom Services](#adding-custom-services)
-    - [Managing Users and Roles](#managing-users-and-roles)
     - [Custom APIs](#custom-apis)
 5. [Advanced Topics](#advanced-topics)
     - [Integration with External Services](#integration-with-external-services)
@@ -424,16 +423,150 @@ Once our `TreeAssets` are in place, the default map may no longer suffice due to
 ```
 
 [Back to Top](#treeorg-tutorial-setting-up-a-custom-project-with-openremote)
+
 ### Adding Custom Services
-*How to add custom services to the TreeOrg project.*
+
+In our ongoing effort to enhance the management and operational efficiency of TreeOrg, we introduce the `SortingService`. This service is strategically designed to manage and sort TreeAssets based on critical attributes such as water level.
+
+#### SortingService Overview
+
+The `SortingService` is part of the new suite of custom services housed within the `treeorg` package in the `manager/src/main/java/org.openremote.manager` directory. This service is initiated upon startup and focuses on retrieving all `TreeAssets`, sorting them according to their water levels. By doing so, it identifies the top 10 assets that require immediate attention, thereby optimizing the maintenance workflows.
+
+The service operates by executing a filtered query that retrieves assets based on their type and the specified attribute (`waterLevel` in this case). It ensures that only assets with non-null attribute values are considered, sorting them in ascending order to prioritize maintenance for trees with the most critical needs first.
+
+Here's a brief look at how the service is implemented:
+
+- **Asset Retrieval and Sorting**: The service queries the `AssetStorageService` to fetch all relevant assets and applies sorting logic based on the water level attribute. It leverages Java’s Stream API to efficiently filter and sort these assets inline with their defined attributes.
+- **Logging**: For operational transparency, the service logs the results of the sorting process, providing clear and actionable insights into which assets have the lowest water levels and thus, higher priority for maintenance.
+- **Service Registration**: To ensure proper integration, the `SortingService` must be registered within the OpenRemote system. This is done by adding `org.openremote.manager.treeorg.SortingService` to the service manifest located in the `META-INF/services` directory.
+
+
+```java
+public class SortingService implements ContainerService {
+    private AssetStorageService assetStorageService;
+    private static final Logger LOG = Logger.getLogger(ManagerWebService.class.getName());
+
+    public <T extends Comparable<T>> List<Asset<?>> findAllAssetsSortedByAttributeAndType(Class<?> assetType, String attributeName) {
+        AssetQuery query = new AssetQuery()
+                .types((Class<? extends Asset<?>>) assetType)
+                .attributes(new AttributePredicate(attributeName, null));
+
+        List<Asset<?>> assets = assetStorageService.findAll(query).stream()
+                .filter(asset -> asset.getAttributes().get(attributeName).isPresent())
+                .filter(asset -> {
+                    Optional<Attribute<?>> attribute = asset.getAttributes().get(attributeName);
+                    return attribute.map(attr -> attr.getValue().orElse(null)).orElse(null) != null;
+                })
+                .sorted(Comparator.comparing(asset -> {
+                    Optional<Attribute<?>> attribute = asset.getAttributes().get(attributeName);
+                    return (T) attribute.get().getValue().get();
+                }))
+                .limit(10)
+                .collect(Collectors.toList());
+
+        if (assets.isEmpty()) {
+            LOG.info("No assets with non-null values found for attribute: " + attributeName);
+        } else {
+            assets.forEach(asset -> {
+                Optional<Attribute<?>> attribute = asset.getAttributes().get(attributeName);
+                attribute.ifPresent(attr -> {
+                    Optional<?> value = attr.getValue();
+                    if (value.isPresent() && value.get() instanceof Number) {
+                        Integer attributeValue = ((Number) value.get()).intValue();
+                        LOG.info("Asset ID: " + asset.getId() + asset.getName() + " - " + attributeName + ": " + attributeValue);
+                    } else {
+                        LOG.info("Asset ID: " + asset.getId() + " - " + attributeName + " is not a number or not present.");
+                    }
+                });
+            });
+        }
+        return assets;
+    }
+    @Override
+    public void init(Container container) throws Exception {
+        this.assetStorageService = container.getService(AssetStorageService.class);
+    }
+
+    @Override
+    public void start(Container container) throws Exception {
+        Class<?> assetType = TreeAsset.class;
+        var attributeName = new Attribute<>("waterLevel").getName();
+        findAllAssetsSortedByAttributeAndType(assetType, attributeName);
+    }
+}
+```
+
+By implementing the `SortingService`, TreeOrg not only advances its asset management capabilities but also enhances its responsiveness to environmental conditions affecting urban forestry management. This service exemplifies how custom solutions can be tailored to meet specific operational needs within the broader framework of OpenRemote's IoT management platform.
 
 [Back to Top](#treeorg-tutorial-setting-up-a-custom-project-with-openremote)
-### Managing Users and Roles
-*Guide to managing users and roles in the TreeOrg realm.*
 
-[Back to Top](#treeorg-tutorial-setting-up-a-custom-project-with-openremote)
 ### Custom APIs
-*Instructions for creating custom APIs.*
+
+As part of our commitment to enhancing TreeOrg's technological infrastructure, we have developed a custom API that allows for dynamic interaction with our asset management system. The `TreeOrgResource` interface defines the functionalities of our custom API, focusing primarily on asset management operations such as sorting assets based on specific attributes.
+
+#### TreeOrgResource Interface
+
+The `TreeOrgResource` interface, located in the model folder, defines the necessary endpoint for sorting assets:
+
+```java
+public interface TreeOrgResource {
+    Response sortAssetsByAttribute(String assetType, String attributeName);
+}
+```
+This interface is implemented in the TreeOrgResourceImplementation class within the manager folder, which provides the functionality to sort assets by attributes through a RESTful service:
+
+```java
+@Path("/")
+public class TreeOrgResourceImplementation implements TreeOrgResource {
+    private final SortingService sortingService;
+
+    public TreeOrgResourceImplementation(SortingService sortingService) {
+        this.sortingService = sortingService;
+    }
+
+    @GET
+    @Path("sortbyattribute")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response sortAssetsByAttribute(@QueryParam("assetType") String assetType, @QueryParam("attribute") String attributeName) {
+        Class<?> type;
+        try {
+            type = Class.forName(assetType);
+        } catch (ClassNotFoundException e) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                           .entity("Asset type not found: " + assetType)
+                           .build();
+        }
+        List<Asset<?>> sortedAssets = sortingService.findAllAssetsSortedByAttributeAndType(type, attributeName);
+        return Response.ok(sortedAssets).build();
+    }
+}
+```
+Integration with TreeOrgRestService
+To ensure that this API is integrated and available for use, the TreeOrgResourceImplementation is registered within our system through the TreeOrgRestService:
+
+```java
+public class TreeOrgRestService implements ContainerService {
+    private static final Logger LOG = Logger.getLogger(ManagerWebService.class.getName());
+    protected AssetStorageService assetStorageService;
+    protected SortingService sortingService;
+
+    @Override
+    public void init(Container container) throws Exception {
+        ManagerWebService webService = container.getService(ManagerWebService.class);
+        assetStorageService = container.getService(AssetStorageService.class);
+        sortingService = container.getService(SortingService.class);
+        webService.addApiSingleton(new TreeOrgResourceImplementation(sortingService));
+    }
+}
+```
+This service setup ensures that our custom API is properly instantiated and made available through the ManagerWebService at the application startup. By creating this dedicated endpoint, TreeOrg enhances its operational capabilities, providing stakeholders with direct, efficient access to real-time data and asset management functionalities.
+
+Accessing the Endpoint
+You can now access the endpoint via:
+
+```GET http://localhost:8080/api/treeorg/sortbyattribute?assetType=org.openremote.model.treeorg.TreeAsset&attribute=waterLevel```
+
+This will serve a response containing the 10 TreeAssets with the lowest water levels. It offers a convenient way for maintenance managers and city planners to quickly identify trees that require immediate attention, streamlining the maintenance process and enhancing urban environmental management.
 
 [Back to Top](#treeorg-tutorial-setting-up-a-custom-project-with-openremote)
 ## Advanced Topics
