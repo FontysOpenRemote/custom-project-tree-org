@@ -23,7 +23,7 @@ public class TreeOrgRestService implements ContainerService {
         routeService = container.getService(RouteService.class);
         routeOptimizationService = container.getService(RouteOptimizationService.class);
         routeApiClient = container.getService(RouteApiClient.class);
-        webService.addApiSingleton(new TreeOrgResourceImplementation(sortingService));
+        webService.addApiSingleton(new TreeOrgResourceImplementation(sortingService, routeOptimizationService));
         LOG.info("Registered custom API classes: " + sortingService);
     }
 

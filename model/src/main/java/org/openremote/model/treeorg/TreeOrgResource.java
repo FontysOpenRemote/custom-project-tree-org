@@ -6,4 +6,6 @@ import jakarta.ws.rs.core.Response;
 public interface TreeOrgResource {
 
     Response sortAssetsByAttribute(String assetType, String attributeName);
+
+    Response optimizeRouteForSensors(String assetType, String attributeName);
 }
