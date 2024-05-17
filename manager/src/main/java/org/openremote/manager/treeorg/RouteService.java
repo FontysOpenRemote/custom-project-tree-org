@@ -7,7 +7,8 @@ import org.openremote.model.asset.Asset;
 import org.openremote.model.attribute.Attribute;
 import org.openremote.model.geo.GeoJSONPoint;
 import org.openremote.model.query.AssetQuery;
-import org.openremote.model.treeorg.TreeAsset;
+import org.openremote.model.value.AttributeDescriptor;
+import org.openremote.model.value.ValueType;
 
 import java.util.*;
 import java.util.logging.Logger;
@@ -27,21 +28,31 @@ public class RouteService implements ContainerService {
     }
 
     @Override
-    public void start(Container container) throws Exception {
+    public void start(Container container) {
     }
 
     @Override
-    public void stop(Container container) throws Exception {
+    public void stop(Container container) {
     }
 
     /**
      * Optimizes the route for a list of sorted assets based on a specified attribute.
      *
      * @param sortedAssets  A list of sorted assets to optimize the route for.
-     * @param attributeName The name of the attribute used for sorting.
      * @return A RouteResponse containing the Google Maps URLs for the optimized routes and the ordered assets.
      */
     public RouteResponse optimizeRouteForSortedAssets(List<Asset<?>> sortedAssets, String attributeName) {
+        if (sortedAssets.isEmpty()) {
+            LOG.severe("Sorted assets list is empty. Unable to optimize route.");
+            return new RouteResponse(null, Collections.emptyList()); // Return a default RouteResponse or null
+        }
+
+        if (sortedAssets.size() == 1) {
+            LOG.warning("Only one asset in the list. Route optimization may not be necessary.");
+            updateRouteIds(sortedAssets);
+            return new RouteResponse(null, sortedAssets);
+        }
+
         List<double[]> coordinates = extractCoordinates(sortedAssets);
         double[] startingPosition = {5.453487298268298, 51.45081456926727};
 
@@ -58,6 +69,7 @@ public class RouteService implements ContainerService {
 
         return new RouteResponse(newGoogleMapsURL, sortedAssets);
     }
+
 
     /**
      * Finds the optimal route using the closest-next-point algorithm.
@@ -101,7 +113,7 @@ public class RouteService implements ContainerService {
      * @param point2 Second point.
      * @return Distance between the two points.
      */
-    private double calculateDistance(double[] point1, double[] point2) {
+    public double calculateDistance(double[] point1, double[] point2) {
         double dx = point1[0] - point2[0];
         double dy = point1[1] - point2[1];
         return Math.sqrt(dx * dx + dy * dy);
@@ -147,13 +159,19 @@ public class RouteService implements ContainerService {
         String[] assetIdsArray = assetIdToRouteIdMap.keySet().toArray(new String[0]);
 
         // Find the relevant assets by their IDs
-        AssetQuery query = new AssetQuery().types(TreeAsset.class).ids(assetIdsArray);
+        AssetQuery query = new AssetQuery().ids(assetIdsArray);
         List<Asset<?>> relevantAssets = assetStorageService.findAll(query);
+
+        if (relevantAssets == null || relevantAssets.isEmpty()) {
+            LOG.severe("No relevant assets found for the given IDs.");
+            return;
+        }
 
         // Update routeId attributes for relevant assets
         for (Asset<?> asset : relevantAssets) {
             Integer newRouteId = assetIdToRouteIdMap.get(asset.getId());
-            asset.getAttributes().getOrCreate(TreeAsset.ROUTE_ID).setValue(newRouteId);
+            AttributeDescriptor<Integer> routeIdDescriptor = new AttributeDescriptor<>("routeId", ValueType.POSITIVE_INTEGER);
+            asset.getAttributes().getOrCreate(routeIdDescriptor).setValue(newRouteId);
             assetStorageService.merge(asset);
             LOG.info("Setting route ID " + newRouteId + " for asset: " + asset.getName());
         }
@@ -163,7 +181,8 @@ public class RouteService implements ContainerService {
             if (!assetIdToRouteIdMap.containsKey(assetId)) {
                 Asset<?> asset = assetStorageService.find(assetId);
                 if (asset != null) {
-                    asset.getAttributes().getOrCreate(TreeAsset.ROUTE_ID).setValue(0);
+                    AttributeDescriptor<Integer> routeIdDescriptor = new AttributeDescriptor<>("routeId", ValueType.POSITIVE_INTEGER);
+                    asset.getAttributes().getOrCreate(routeIdDescriptor).setValue(0);
                     assetStorageService.merge(asset);
                     LOG.info("Resetting route ID to 0 for asset ID: " + asset.getId());
                 }
@@ -189,17 +208,6 @@ public class RouteService implements ContainerService {
             });
         });
         return coordinates;
-    }
-
-    /**
-     * Prints the ordered list of assets.
-     *
-     * @param assets List of ordered assets.
-     */
-    private void printOrderedAssets(List<Asset<?>> assets, String attributeName) {
-        LOG.info("Ordered visitation list:");
-        assets.forEach(asset -> LOG.info("Visit Asset ID: " + asset.getId() + " - "
-                + asset.getName() + " - " + asset.getAttribute(attributeName)));
     }
 
     /**

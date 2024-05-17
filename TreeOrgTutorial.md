@@ -13,6 +13,7 @@ Welcome to the TreeOrg tutorial! In this guide, we will show you how to set up a
     - [Custom APIs](#custom-apis)
 5. [Advanced Topics](#advanced-topics)
     - [Integration with External Services](#integration-with-external-services)
+   - [Refactoring the services](#refactor-optimizing-routes)
    - [Creating Custom Widgets](#creating-custom-widgets)
 6. [FAQ and Troubleshooting](#faq-and-troubleshooting)
 
@@ -1324,7 +1325,384 @@ provided us with a tailored solution that could scale with TreeOrg's growing nee
 <details>
 <summary>View Refactored Code</summary>
 
+#### RouteOptimizationService
+
 ````java
+
+public class RouteOptimizationService implements ContainerService {
+   private static final Logger LOG = Logger.getLogger(RouteService.class.getName());
+   private SortingService sortingService;
+   private RouteService routeService;
+
+   @Override
+   public void init(Container container) throws Exception {
+      this.sortingService = container.getService(SortingService.class);
+      this.routeService = container.getService(RouteService.class);
+   }
+
+   @Override
+   public void start(Container container) {
+      // Perform initial optimization
+      optimizeRouteForSensors(TreeAsset.class, "waterLevel");
+      optimizeRouteForSensors(TreeAsset.class, "soilTemperature");
+   }
+
+   @Override
+   public void stop(Container container) {
+      // Any cleanup logic if needed
+   }
+
+   public RouteResponse optimizeRouteForSensors(Class<?> assetType, String attributeName) {
+      if (assetType == null || attributeName == null || attributeName.isEmpty()) {
+         LOG.severe("Asset type or attribute name is null or empty. Unable to optimize route.");
+         return new RouteResponse(null, Collections.emptyList());
+      }
+
+      List<Asset<?>> sortedSensors = sortingService.findAllAssetsSortedByAttributeAndType(assetType, attributeName);
+      if (sortedSensors == null || sortedSensors.isEmpty()) {
+         LOG.severe("No sorted sensors found for the given attribute. Unable to optimize route.");
+         return new RouteResponse(null, Collections.emptyList());
+      }
+
+      // Delegate route optimization to RouteService
+      return routeService.optimizeRouteForSortedAssets(sortedSensors, attributeName);
+   }
+
+}
+````
+
+#### RouteService
+
+````java
+
+
+
+public class RouteService implements ContainerService {
+
+   private AssetStorageService assetStorageService;
+   private static final Logger LOG = Logger.getLogger(RouteService.class.getName());
+
+   public RouteService() {
+   }
+
+   @Override
+   public void init(Container container) throws Exception {
+      this.assetStorageService = container.getService(AssetStorageService.class);
+   }
+
+   @Override
+   public void start(Container container) {
+   }
+
+   @Override
+   public void stop(Container container) {
+   }
+
+   /**
+    * Optimizes the route for a list of sorted assets based on a specified attribute.
+    *
+    * @param sortedAssets  A list of sorted assets to optimize the route for.
+    * @return A RouteResponse containing the Google Maps URLs for the optimized routes and the ordered assets.
+    */
+   public RouteResponse optimizeRouteForSortedAssets(List<Asset<?>> sortedAssets, String attributeName) {
+      if (sortedAssets.isEmpty()) {
+         LOG.severe("Sorted assets list is empty. Unable to optimize route.");
+         return new RouteResponse(null, Collections.emptyList()); // Return a default RouteResponse or null
+      }
+
+      if (sortedAssets.size() == 1) {
+         LOG.warning("Only one asset in the list. Route optimization may not be necessary.");
+         updateRouteIds(sortedAssets);
+         return new RouteResponse(null, sortedAssets);
+      }
+
+      List<double[]> coordinates = extractCoordinates(sortedAssets);
+      double[] startingPosition = {5.453487298268298, 51.45081456926727};
+
+      // Generate the new closest-next-point route
+      List<double[]> newOptimalRoute = findOptimalRoute(coordinates, startingPosition);
+      String newGoogleMapsURL = generateGoogleMapsURL(newOptimalRoute);
+      LOG.info("View new route on Google Maps: " + newGoogleMapsURL);
+
+      // Update the parent asset with the Google Maps URL
+      updateParentAssetWithGoogleMapsURL(newGoogleMapsURL, sortedAssets);
+
+      // Update route IDs for the assets
+      updateRouteIds(sortedAssets);
+
+      return new RouteResponse(newGoogleMapsURL, sortedAssets);
+   }
+
+
+   /**
+    * Finds the optimal route using the closest-next-point algorithm.
+    *
+    * @param coordinates      List of coordinates.
+    * @param startingPosition Starting position.
+    * @return List of coordinates representing the optimal route.
+    */
+   private List<double[]> findOptimalRoute(List<double[]> coordinates, double[] startingPosition) {
+      List<double[]> route = new ArrayList<>();
+      boolean[] visited = new boolean[coordinates.size()];
+      double[] currentPosition = startingPosition;
+      route.add(currentPosition);
+
+      for (int i = 0; i < coordinates.size(); i++) {
+         double minDistance = Double.MAX_VALUE;
+         int closestPointIndex = -1;
+         for (int j = 0; j < coordinates.size(); j++) {
+            if (!visited[j]) {
+               double distance = calculateDistance(currentPosition, coordinates.get(j));
+               if (distance < minDistance) {
+                  minDistance = distance;
+                  closestPointIndex = j;
+               }
+            }
+         }
+         if (closestPointIndex != -1) {
+            visited[closestPointIndex] = true;
+            currentPosition = coordinates.get(closestPointIndex);
+            route.add(currentPosition);
+         }
+      }
+      route.add(startingPosition); // Return to start
+      return route;
+   }
+
+   /**
+    * Calculates the distance between two coordinates.
+    *
+    * @param point1 First point.
+    * @param point2 Second point.
+    * @return Distance between the two points.
+    */
+   private double calculateDistance(double[] point1, double[] point2) {
+      double dx = point1[0] - point2[0];
+      double dy = point1[1] - point2[1];
+      return Math.sqrt(dx * dx + dy * dy);
+   }
+
+   /**
+    * Updates the Google Maps URL attribute for the relevant assets and clears it for others.
+    *
+    * @param googleMapsURL The Google Maps URL to set.
+    */
+   private void updateParentAssetWithGoogleMapsURL(String googleMapsURL, List<Asset<?>> sortedAssets) {
+      Asset<?> parentAsset = findParentAsset(sortedAssets);
+      if (parentAsset != null) {
+         parentAsset.getAttributes().getOrCreate(NOTES).setValue(googleMapsURL);
+         assetStorageService.merge(parentAsset);
+         LOG.info("Updated parent asset " + parentAsset.getName() + " ID: " + parentAsset.getId() + " with Google Maps URL");
+      }
+   }
+
+   private Asset<?> findParentAsset(List<Asset<?>> sortedAssets) {
+      for (Asset<?> asset : sortedAssets) {
+         String parentId = asset.getParentId();
+         if (parentId != null) {
+            return assetStorageService.find(parentId);
+         }
+      }
+      LOG.severe("Parent asset not found");
+      return null;
+   }
+
+   /**
+    * Updates the routeId attribute of each asset in the ordered list and resets routeId to 0 for other assets.
+    *
+    * @param orderedAssets The list of assets in the order of the optimized route.
+    */
+   private void updateRouteIds(List<Asset<?>> orderedAssets) {
+      Map<String, Integer> assetIdToRouteIdMap = new HashMap<>();
+      for (int i = 0; i < orderedAssets.size(); i++) {
+         assetIdToRouteIdMap.put(orderedAssets.get(i).getId(), i + 1);
+      }
+
+      // Convert the list of asset IDs to an array
+      String[] assetIdsArray = assetIdToRouteIdMap.keySet().toArray(new String[0]);
+
+      // Find the relevant assets by their IDs
+      AssetQuery query = new AssetQuery().ids(assetIdsArray);
+      List<Asset<?>> relevantAssets = assetStorageService.findAll(query);
+
+      if (relevantAssets == null || relevantAssets.isEmpty()) {
+         LOG.severe("No relevant assets found for the given IDs.");
+         return;
+      }
+
+      // Update routeId attributes for relevant assets
+      for (Asset<?> asset : relevantAssets) {
+         Integer newRouteId = assetIdToRouteIdMap.get(asset.getId());
+         AttributeDescriptor<Integer> routeIdDescriptor = new AttributeDescriptor<>("routeId", ValueType.POSITIVE_INTEGER);
+         asset.getAttributes().getOrCreate(routeIdDescriptor).setValue(newRouteId);
+         assetStorageService.merge(asset);
+         LOG.info("Setting route ID " + newRouteId + " for asset: " + asset.getName());
+      }
+
+      // Reset routeId for assets not in the ordered list
+      for (String assetId : assetIdToRouteIdMap.keySet()) {
+         if (!assetIdToRouteIdMap.containsKey(assetId)) {
+            Asset<?> asset = assetStorageService.find(assetId);
+            if (asset != null) {
+               AttributeDescriptor<Integer> routeIdDescriptor = new AttributeDescriptor<>("routeId", ValueType.POSITIVE_INTEGER);
+               asset.getAttributes().getOrCreate(routeIdDescriptor).setValue(0);
+               assetStorageService.merge(asset);
+               LOG.info("Resetting route ID to 0 for asset ID: " + asset.getId());
+            }
+         }
+      }
+   }
+
+   /**
+    * Extracts coordinates from a list of assets.
+    *
+    * @param assets List of assets to extract coordinates from.
+    * @return List of coordinates in [longitude, latitude] format.
+    */
+   private List<double[]> extractCoordinates(List<Asset<?>> assets) {
+      List<double[]> coordinates = new ArrayList<>();
+      assets.forEach(asset -> {
+         Optional<Attribute<?>> locationAttribute = asset.getAttributes().get("location");
+         locationAttribute.ifPresent(attr -> {
+            GeoJSONPoint point = (GeoJSONPoint) attr.getValue().orElse(null);
+            if (point != null) {
+               coordinates.add(new double[]{point.getX(), point.getY()});
+            }
+         });
+      });
+      return coordinates;
+   }
+
+   /**
+    * Generates a Google Maps URL for the given list of coordinates.
+    *
+    * @param coordinates List of coordinates to include in the URL.
+    * @return Google Maps URL for the route.
+    */
+   public String generateGoogleMapsURL(List<double[]> coordinates) {
+      StringBuilder url = new StringBuilder("https://www.google.com/maps/dir/");
+      coordinates.forEach(coord -> url.append(coord[1]).append(",").append(coord[0]).append("/"));
+      return url.toString();
+   }
+}
+```` 
+
+#### SortingService
+
+````java
+public class SortingService implements ContainerService {
+   private AssetStorageService assetStorageService;
+   private static final Logger LOG = Logger.getLogger(ManagerWebService.class.getName());
+
+   @Override
+   public void init(Container container) throws Exception {
+      this.assetStorageService = container.getService(AssetStorageService.class);
+   }
+
+   @Override
+   public void start(Container container) throws Exception {
+      Class<?> assetType = TreeAsset.class;
+      var attributeName = new Attribute<>("waterLevel").getName();
+      findAllAssetsSortedByAttributeAndType(assetType, attributeName);
+   }
+
+   @Override
+   public void stop(Container container) throws Exception {
+      // Any cleanup logic if needed
+   }
+
+
+   /**
+    * Finds all assets of a specific type sorted by the specified attribute.
+    * @param attributeName The name of the attribute to sort on.
+    * @param assetType The type of assets to filter.
+    * @param <T> The type of the attribute to sort on.
+    * @return List of assets of the specified type sorted by the specified attribute.
+    */
+   public <T extends Comparable<T>> List<Asset<?>> findAllAssetsSortedByAttributeAndType(Class<?> assetType, String attributeName) {
+      AssetQuery query = new AssetQuery()
+              .types((Class<? extends Asset<?>>) assetType)
+              .attributes(new AttributePredicate(attributeName, null));
+
+      List<Asset<?>> assets = assetStorageService.findAll(query).stream()
+              .filter(asset -> asset.getAttributes().get(attributeName).isPresent())
+              .filter(asset -> {
+                 Optional<Attribute<?>> attribute = asset.getAttributes().get(attributeName);
+                 return attribute.map(attr -> attr.getValue().orElse(null)).orElse(null) != null;
+              })
+              .sorted(Comparator.comparing(asset -> {
+                 Optional<Attribute<?>> attribute = asset.getAttributes().get(attributeName);
+                 return (T) attribute.get().getValue().get();
+              }))
+              .limit(10)
+              .collect(Collectors.toList());
+
+      if (assets.isEmpty()) {
+         LOG.info("No assets with non-null values found for attribute: " + attributeName);
+      } else {
+         assets.forEach(asset -> {
+            Optional<Attribute<?>> attribute = asset.getAttributes().get(attributeName);
+            attribute.ifPresent(attr -> {
+               Optional<?> value = attr.getValue();
+               if (value.isPresent() && value.get() instanceof Number) {
+                  Integer attributeValue = ((Number) value.get()).intValue();
+                  LOG.info("Asset ID: " + asset.getId() + asset.getName() + " - " + attributeName + ": " + attributeValue);
+               } else {
+                  LOG.info("Asset ID: " + asset.getId() + " - " + attributeName + " is not a number or not present.");
+               }
+            });
+         });
+      }
+      return assets;
+   }
+
+}
+````
+
+#### ResourceImplementation
+
+````java
+
+@Path("/")
+public class TreeOrgResourceImplementation implements TreeOrgResource {
+
+   private final SortingService sortingService;
+   private final RouteOptimizationService routeOptimizationService;
+
+   public TreeOrgResourceImplementation(SortingService sortingService, RouteOptimizationService routeOptimizationService) {
+      this.sortingService = sortingService;
+      this.routeOptimizationService = routeOptimizationService;
+   }
+
+   @GET
+   @Path("sortbyattribute")
+   @Produces(MediaType.APPLICATION_JSON)
+   public Response sortAssetsByAttribute(@QueryParam("assetType") String assetType, @QueryParam("attribute") String attributeName) {
+      Class<?> type = null;
+      try {
+         type = Class.forName(assetType);
+      } catch (ClassNotFoundException e) {
+         throw new RuntimeException(e);
+      }
+      List<Asset<?>> sortedAssets = sortingService.findAllAssetsSortedByAttributeAndType(type, attributeName);
+      return Response.ok(sortedAssets).build();
+   }
+
+   @GET
+   @Path("optimizeRoute")
+   @Produces(MediaType.APPLICATION_JSON)
+   public Response optimizeRouteForSensors(@QueryParam("assetType") String assetType, @QueryParam("attribute") String attributeName) {
+      Class<?> type = null;
+      try {
+         type = Class.forName(assetType);
+      } catch (ClassNotFoundException e) {
+         throw new RuntimeException(e);
+      }
+      RouteResponse routeResponse = routeOptimizationService.optimizeRouteForSensors(type, attributeName);
+      return Response.ok(routeResponse).build();
+   }
+}
+
 
 
 ````
