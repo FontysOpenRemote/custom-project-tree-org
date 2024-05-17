@@ -482,56 +482,71 @@ Here's a brief look at how the service is implemented:
 
 ```java
 public class SortingService implements ContainerService {
-    private AssetStorageService assetStorageService;
-    private static final Logger LOG = Logger.getLogger(ManagerWebService.class.getName());
+   private AssetStorageService assetStorageService;
+   private static final Logger LOG = Logger.getLogger(ManagerWebService.class.getName());
 
-    public <T extends Comparable<T>> List<Asset<?>> findAllAssetsSortedByAttributeAndType(Class<?> assetType, String attributeName) {
-        AssetQuery query = new AssetQuery()
-                .types((Class<? extends Asset<?>>) assetType)
-                .attributes(new AttributePredicate(attributeName, null));
+   @Override
+   public void init(Container container) throws Exception {
+      this.assetStorageService = container.getService(AssetStorageService.class);
+   }
 
-        List<Asset<?>> assets = assetStorageService.findAll(query).stream()
-                .filter(asset -> asset.getAttributes().get(attributeName).isPresent())
-                .filter(asset -> {
-                    Optional<Attribute<?>> attribute = asset.getAttributes().get(attributeName);
-                    return attribute.map(attr -> attr.getValue().orElse(null)).orElse(null) != null;
-                })
-                .sorted(Comparator.comparing(asset -> {
-                    Optional<Attribute<?>> attribute = asset.getAttributes().get(attributeName);
-                    return (T) attribute.get().getValue().get();
-                }))
-                .limit(10)
-                .collect(Collectors.toList());
+   @Override
+   public void start(Container container) throws Exception {
+      Class<?> assetType = TreeAsset.class;
+      var attributeName = new Attribute<>("waterLevel").getName();
+      findAllAssetsSortedByAttributeAndType(assetType, attributeName);
+   }
 
-        if (assets.isEmpty()) {
-            LOG.info("No assets with non-null values found for attribute: " + attributeName);
-        } else {
-            assets.forEach(asset -> {
-                Optional<Attribute<?>> attribute = asset.getAttributes().get(attributeName);
-                attribute.ifPresent(attr -> {
-                    Optional<?> value = attr.getValue();
-                    if (value.isPresent() && value.get() instanceof Number) {
-                        Integer attributeValue = ((Number) value.get()).intValue();
-                        LOG.info("Asset ID: " + asset.getId() + asset.getName() + " - " + attributeName + ": " + attributeValue);
-                    } else {
-                        LOG.info("Asset ID: " + asset.getId() + " - " + attributeName + " is not a number or not present.");
-                    }
-                });
+   @Override
+   public void stop(Container container) throws Exception {
+      // Any cleanup logic if needed
+   }
+
+
+   /**
+    * Finds all assets of a specific type sorted by the specified attribute.
+    * @param attributeName The name of the attribute to sort on.
+    * @param assetType The type of assets to filter.
+    * @param <T> The type of the attribute to sort on.
+    * @return List of assets of the specified type sorted by the specified attribute.
+    */
+   public <T extends Comparable<T>> List<Asset<?>> findAllAssetsSortedByAttributeAndType(Class<?> assetType, String attributeName) {
+      AssetQuery query = new AssetQuery()
+              .types((Class<? extends Asset<?>>) assetType)
+              .attributes(new AttributePredicate(attributeName, null));
+
+      List<Asset<?>> assets = assetStorageService.findAll(query).stream()
+              .filter(asset -> asset.getAttributes().get(attributeName).isPresent())
+              .filter(asset -> {
+                 Optional<Attribute<?>> attribute = asset.getAttributes().get(attributeName);
+                 return attribute.map(attr -> attr.getValue().orElse(null)).orElse(null) != null;
+              })
+              .sorted(Comparator.comparing(asset -> {
+                 Optional<Attribute<?>> attribute = asset.getAttributes().get(attributeName);
+                 return (T) attribute.get().getValue().get();
+              }))
+              .limit(10)
+              .collect(Collectors.toList());
+
+      if (assets.isEmpty()) {
+         LOG.info("No assets with non-null values found for attribute: " + attributeName);
+      } else {
+         assets.forEach(asset -> {
+            Optional<Attribute<?>> attribute = asset.getAttributes().get(attributeName);
+            attribute.ifPresent(attr -> {
+               Optional<?> value = attr.getValue();
+               if (value.isPresent() && value.get() instanceof Number) {
+                  Integer attributeValue = ((Number) value.get()).intValue();
+                  LOG.info("Asset ID: " + asset.getId() + asset.getName() + " - " + attributeName + ": " + attributeValue);
+               } else {
+                  LOG.info("Asset ID: " + asset.getId() + " - " + attributeName + " is not a number or not present.");
+               }
             });
-        }
-        return assets;
-    }
-    @Override
-    public void init(Container container) throws Exception {
-        this.assetStorageService = container.getService(AssetStorageService.class);
-    }
+         });
+      }
+      return assets;
+   }
 
-    @Override
-    public void start(Container container) throws Exception {
-        Class<?> assetType = TreeAsset.class;
-        var attributeName = new Attribute<>("waterLevel").getName();
-        findAllAssetsSortedByAttributeAndType(assetType, attributeName);
-    }
 }
 ```
 
@@ -640,8 +655,11 @@ OpenRouteService API.
 
 #### RouteOptimizationService
 
-The `RouteOptimizationService` is responsible for orchestrating the route optimization process. It interacts with
-the `SortingService` to retrieve sorted assets and the `RouteService` to optimize the route based on these assets.
+The `RouteOptimizationService` orchestrates the route optimization process by interacting with the `SortingService` to
+retrieve sorted assets and then delegating the route optimization task to the `RouteService`. This service is designed
+to initiate upon startup and perform an initial optimization for assets based on critical attributes like water level
+and soil temperature. By automating the route optimization process, TreeOrg ensures efficient allocation of resources
+and timely maintenance of urban trees.
 
 <details>
 <summary>View Code</summary>
@@ -649,34 +667,34 @@ the `SortingService` to retrieve sorted assets and the `RouteService` to optimiz
 ```java
 public class RouteOptimizationService implements ContainerService {
 
-    private SortingService sortingService;
-    private RouteService routeService;
+   private SortingService sortingService;
+   private RouteService routeService;
 
-    @Override
-    public void init(Container container) throws Exception {
-        this.sortingService = container.getService(SortingService.class);
-        this.routeService = container.getService(RouteService.class);
-    }
+   @Override
+   public void init(Container container) throws Exception {
+      this.sortingService = container.getService(SortingService.class);
+      this.routeService = container.getService(RouteService.class);
+   }
 
-    @Override
-    public void start(Container container) throws Exception {
-        // Perform initial optimization
-        optimizeRouteForSensors(TreeAsset.class, "waterLevel");
-        optimizeRouteForSensors(TreeAsset.class, "soilTemperature");
-    }
+   @Override
+   public void start(Container container) throws Exception {
+      // Perform initial optimization
+      optimizeRouteForSensors(TreeAsset.class, "waterLevel");
+      optimizeRouteForSensors(TreeAsset.class, "soilTemperature");
+   }
 
-    @Override
-    public void stop(Container container) {
-        // Any cleanup logic if needed
-    }
+   @Override
+   public void stop(Container container) {
+      // Any cleanup logic if needed
+   }
 
-    public RouteResponse optimizeRouteForSensors(Class<?> assetType, String attributeName) {
-        // Delegate finding and sorting to SortingService
-        List<Asset<?>> sortedSensors = sortingService.findAllAssetsSortedByAttributeAndType(assetType, attributeName);
+   public RouteResponse optimizeRouteForSensors(Class<?> assetType, String attributeName) {
+      // Delegate finding and sorting to SortingService
+      List<Asset<?>> sortedSensors = sortingService.findAllAssetsSortedByAttributeAndType(assetType, attributeName);
 
-        // Delegate route optimization to RouteService
-        return routeService.optimizeRouteForSortedAssets(sortedSensors, attributeName);
-    }
+      // Delegate route optimization to RouteService
+      return routeService.optimizeRouteForSortedAssets(sortedSensors, attributeName);
+   }
 }
 ```
 
@@ -684,8 +702,12 @@ public class RouteOptimizationService implements ContainerService {
 
 #### RouteService
 
-The RouteService communicates with the OpenRouteService API to optimize the route between assets. It prepares the
-payload for the API request, handles the response, and updates the assets with the optimized route information.
+The `RouteService` is responsible for the technical details of communicating with the OpenRouteService API. It prepares
+the payload for the API request by compiling a list of coordinates and other necessary data into a format that the API
+can understand. Upon receiving a response from the API, the service processes this response to determine the optimal
+route between the assets. It then updates the asset information to reflect this optimized route, ensuring that the
+maintenance crew has the most efficient path to follow. The `RouteService` thus plays a crucial role in reducing travel
+time and operational costs.
 
 <details>
 <summary>View Code</summary>
@@ -693,280 +715,297 @@ payload for the API request, handles the response, and updates the assets with t
 ```java
 public class RouteService implements ContainerService {
 
-    private AssetStorageService assetStorageService;
-    private static final Logger LOG = Logger.getLogger(RouteService.class.getName());
-    private RouteApiClient routeApiClient;
-    private Map<Integer, String> jobIdToAssetIdMap = new HashMap<>();
+   private AssetStorageService assetStorageService;
+   private static final Logger LOG = Logger.getLogger(RouteService.class.getName());
+   private RouteApiClient routeApiClient;
+   private Map<Integer, String> jobIdToAssetIdMap = new HashMap<>();
 
-    public RouteService() {
+   public RouteService() {
+   }
 
-    }
+   @Override
+   public void init(Container container) throws Exception {
+      this.assetStorageService = container.getService(AssetStorageService.class);
+      this.routeApiClient = container.getService(RouteApiClient.class);
+   }
 
-    @Override
-    public void init(Container container) throws Exception {
-        this.assetStorageService = container.getService(AssetStorageService.class);
-        this.routeApiClient = container.getService(RouteApiClient.class);
-    }
+   @Override
+   public void start(Container container) throws Exception {
+      // Any start logic if needed
+   }
 
-    @Override
-    public void start(Container container) throws Exception {
-        // Any start logic if needed
-    }
+   @Override
+   public void stop(Container container) throws Exception {
+      // Any cleanup logic if needed
+   }
 
-    @Override
-    public void stop(Container container) throws Exception {
-        // Any cleanup logic if needed
-    }
+   /**
+    * Optimizes the route for a list of sorted assets based on a specified attribute.
+    *
+    * @param sortedAssets  A list of sorted assets to optimize the route for.
+    * @param attributeName The name of the attribute used for sorting.
+    * @return A RouteResponse containing the Google Maps URL for the optimized route and the ordered assets.
+    */
+   public RouteResponse optimizeRouteForSortedAssets(List<Asset<?>> sortedAssets, String attributeName) {
+      List<double[]> coordinates = extractCoordinates(sortedAssets);
 
-    public RouteResponse optimizeRouteForSortedAssets(List<Asset<?>> sortedAssets, String attributeName) {
-        List<double[]> coordinates = extractCoordinates(sortedAssets);
+      double[] startingPosition = {5.453487298268298, 51.45081456926727};
+      String tspQuery = prepareTSPQuery(coordinates, sortedAssets, startingPosition);
+      try {
+         String routeResponse = routeApiClient.callOpenRouteService(tspQuery);
+         LOG.info("Route Response: " + routeResponse);
+         List<Asset<?>> orderedAssets = orderAssetsByRouteResponse(routeResponse, sortedAssets);
+         updateRouteIds(orderedAssets);
+         printOrderedAssets(orderedAssets, attributeName);
 
-        double[] startingPosition = {5.453487298268298, 51.45081456926727};
-        String tspQuery = prepareTSPQuery(coordinates, sortedAssets, startingPosition);
-        try {
-            String routeResponse = routeApiClient.callOpenRouteService(tspQuery);
-            LOG.info("Route Response: " + routeResponse);
-            List<Asset<?>> orderedAssets = orderAssetsByRouteResponse(routeResponse, sortedAssets);
-            updateRouteIds(orderedAssets);
-            printOrderedAssets(orderedAssets, attributeName);
+         List<double[]> routeCoordinates = extractCoordinates(orderedAssets);
+         routeCoordinates.add(0, startingPosition); // Add starting position at the beginning
+         routeCoordinates.add(startingPosition); // Add starting position at the end
 
-            List<double[]> routeCoordinates = extractCoordinates(orderedAssets);
-            routeCoordinates.add(0, startingPosition); // Add starting position at the beginning
-            routeCoordinates.add(startingPosition); // Add starting position at the end
+         String googleMapsURL = generateGoogleMapsURL(routeCoordinates);
+         LOG.info("View route on Google Maps: " + googleMapsURL);
 
-            String googleMapsURL = generateGoogleMapsURL(routeCoordinates);
-            LOG.info("View route on Google Maps: " + googleMapsURL);
+         updateParentAssetWithGoogleMapsURL(googleMapsURL, sortedAssets);
 
-            updateParentAssetWithGoogleMapsURL(googleMapsURL, sortedAssets);
-
-            return new RouteResponse(googleMapsURL, orderedAssets);
-        } catch (IOException | InterruptedException e) {
-            LOG.severe("Failed to call OpenRouteService: " + e.getMessage());
-            return null;
-        }
-    }
-
-
-    private String prepareTSPQuery(List<double[]> coordinates, List<Asset<?>> sortedSensors, double[] startingPosition) {
-        ObjectMapper mapper = new ObjectMapper();
-        ObjectNode payload = mapper.createObjectNode();
-        ArrayNode jobs = mapper.createArrayNode();
-        ArrayNode vehicles = mapper.createArrayNode();
-
-        ObjectNode vehicle = mapper.createObjectNode();
-        vehicle.put("id", 1);
-        vehicle.set("start", mapper.createArrayNode().add(startingPosition[0]).add(startingPosition[1]));
-        vehicle.put("return_to_depot", true);
-        vehicle.put("profile", "driving-car");
-        vehicles.add(vehicle);
-
-        for (int i = 0; i < coordinates.size(); i++) {
-            ObjectNode job = mapper.createObjectNode();
-            int jobId = i + 1;
-            job.put("id", jobId); // Use a unique integer as job ID
-            job.set("location", mapper.createArrayNode().add(coordinates.get(i)[0]).add(coordinates.get(i)[1]));
-            jobs.add(job);
-
-            // Map job ID to original asset ID for reference
-            jobIdToAssetIdMap.put(jobId, sortedSensors.get(i).getId());
-        }
-
-        payload.set("vehicles", vehicles);
-        payload.set("jobs", jobs);
-        return payload.toString();
-    }
+         return new RouteResponse(googleMapsURL, orderedAssets);
+      } catch (IOException | InterruptedException e) {
+         LOG.severe("Failed to call OpenRouteService: " + e.getMessage());
+         return null;
+      }
+   }
 
 
-    /**
-     * Updates the Google Maps URL attribute for the relevant assets and clears it for others.
-     *
-     * @param googleMapsURL The Google Maps URL to set.
-     */
-    private void updateParentAssetWithGoogleMapsURL(String googleMapsURL, List<Asset<?>> sortedAssets) {
-        Asset<?> parentAsset = findParentAsset(sortedAssets);
-        if (parentAsset != null) {
-            parentAsset.getAttributes().getOrCreate(NOTES).setValue(googleMapsURL);
-            assetStorageService.merge(parentAsset);
-            LOG.info("Updated parent asset " + parentAsset.getName() + " ID: " + parentAsset.getId() + " with Google Maps URL");
-        }
-    }
+   /**
+    * Prepares the TSP (Travelling Salesperson Problem) query for the OpenRouteService API.
+    *
+    * @param coordinates      A list of coordinates for the assets in [longitude, latitude] format.
+    * @param sortedSensors    A list of sorted assets that represent the sensors.
+    * @param startingPosition The starting position for the route in [longitude, latitude] format.
+    * @return A JSON string representing the TSP query.
+    */
+   private String prepareTSPQuery(List<double[]> coordinates, List<Asset<?>> sortedSensors, double[] startingPosition) {
+      ObjectMapper mapper = new ObjectMapper();
+      ObjectNode payload = mapper.createObjectNode();
+      ArrayNode jobs = mapper.createArrayNode();
+      ArrayNode vehicles = mapper.createArrayNode();
+
+      ObjectNode vehicle = mapper.createObjectNode();
+      vehicle.put("id", 1);
+      vehicle.set("start", mapper.createArrayNode().add(startingPosition[0]).add(startingPosition[1]));
+      vehicle.put("return_to_depot", true);
+      vehicle.put("profile", "driving-car");
+      vehicles.add(vehicle);
+
+      for (int i = 0; i < coordinates.size(); i++) {
+         ObjectNode job = mapper.createObjectNode();
+         int jobId = i + 1;
+         job.put("id", jobId); // Use a unique integer as job ID
+         job.set("location", mapper.createArrayNode().add(coordinates.get(i)[0]).add(coordinates.get(i)[1]));
+         jobs.add(job);
+
+         // Map job ID to original asset ID for reference
+         jobIdToAssetIdMap.put(jobId, sortedSensors.get(i).getId());
+      }
+
+      payload.set("vehicles", vehicles);
+      payload.set("jobs", jobs);
+      return payload.toString();
+   }
 
 
-    private Asset<?> findParentAsset(List<Asset<?>> sortedAssets) {
-        for (Asset<?> asset : sortedAssets) {
-            String parentId = asset.getParentId();
-            if (parentId != null) {
-                return assetStorageService.find(parentId);
+   /**
+    * Updates the Google Maps URL attribute for the relevant assets and clears it for others.
+    *
+    * @param googleMapsURL The Google Maps URL to set.
+    */
+   private void updateParentAssetWithGoogleMapsURL(String googleMapsURL, List<Asset<?>> sortedAssets) {
+      Asset<?> parentAsset = findParentAsset(sortedAssets);
+      if (parentAsset != null) {
+         parentAsset.getAttributes().getOrCreate(NOTES).setValue(googleMapsURL);
+         assetStorageService.merge(parentAsset);
+         LOG.info("Updated parent asset " + parentAsset.getName() + " ID: " + parentAsset.getId() + " with Google Maps URL");
+      }
+   }
+
+   private Asset<?> findParentAsset(List<Asset<?>> sortedAssets) {
+      for (Asset<?> asset : sortedAssets) {
+         String parentId = asset.getParentId();
+         if (parentId != null) {
+            return assetStorageService.find(parentId);
+         }
+      }
+      LOG.severe("Parent asset not found");
+      return null;
+   }
+
+   /**
+    * Updates the routeId attribute of each asset in the ordered list and resets routeId to 0 for other assets.
+    *
+    * @param orderedAssets The list of assets in the order of the optimized route.
+    */
+   private void updateRouteIds(List<Asset<?>> orderedAssets) {
+      Map<String, Integer> assetIdToRouteIdMap = new HashMap<>();
+      for (int i = 0; i < orderedAssets.size(); i++) {
+         assetIdToRouteIdMap.put(orderedAssets.get(i).getId(), i + 1);
+      }
+
+      // Convert the list of asset IDs to an array
+      String[] assetIdsArray = assetIdToRouteIdMap.keySet().toArray(new String[0]);
+
+      // Find the relevant assets by their IDs
+      AssetQuery query = new AssetQuery().types(TreeAsset.class).ids(assetIdsArray);
+      List<Asset<?>> relevantAssets = assetStorageService.findAll(query);
+
+      // Update routeId attributes for relevant assets
+      for (Asset<?> asset : relevantAssets) {
+         Integer newRouteId = assetIdToRouteIdMap.get(asset.getId());
+         asset.getAttributes().getOrCreate(TreeAsset.ROUTE_ID).setValue(newRouteId);
+         assetStorageService.merge(asset);
+         LOG.info("Setting route ID " + newRouteId + " for asset: " + asset.getName());
+      }
+
+      // Reset routeId for assets not in the ordered list
+      for (String assetId : assetIdToRouteIdMap.keySet()) {
+         if (!assetIdToRouteIdMap.containsKey(assetId)) {
+            Asset<?> asset = assetStorageService.find(assetId);
+            if (asset != null) {
+               asset.getAttributes().getOrCreate(TreeAsset.ROUTE_ID).setValue(0);
+               assetStorageService.merge(asset);
+               LOG.info("Resetting route ID to 0 for asset ID: " + asset.getId());
             }
-        }
-        LOG.severe("Parent asset not found");
-        return null;
-    }
+         }
+      }
+   }
 
 
-    /**
-     * Updates the routeId attribute of each asset in the ordered list and resets routeId to 0 for other assets.
-     *
-     * @param orderedAssets The list of assets in the order of the optimized route.
-     */
-    private void updateRouteIds(List<Asset<?>> orderedAssets) {
-        Map<String, Integer> assetIdToRouteIdMap = new HashMap<>();
-        for (int i = 0; i < orderedAssets.size(); i++) {
-            assetIdToRouteIdMap.put(orderedAssets.get(i).getId(), i + 1);
-        }
-
-        AssetQuery query = new AssetQuery().types(TreeAsset.class);
-        List<Asset<?>> allAssets = assetStorageService.findAll(query);
-
-        for (Asset<?> asset : allAssets) {
-            Integer newRouteId = assetIdToRouteIdMap.get(asset.getId());
-            Optional<Integer> currentRouteId = asset.getAttributes().get(TreeAsset.ROUTE_ID)
-                    .map(Attribute::getValue)
-                    .map(Optional::get)
-                    .map(Integer.class::cast);
-
-            if (newRouteId != null) {
-                if (!currentRouteId.isPresent() || !currentRouteId.get().equals(newRouteId)) {
-                    asset.getAttributes().getOrCreate(TreeAsset.ROUTE_ID).setValue(newRouteId);
-                    assetStorageService.merge(asset);
-                    LOG.info("Setting route ID " + newRouteId + " for asset: " + asset.getName());
-                }
-            } else if (currentRouteId.isPresent() && currentRouteId.get() != 0) {
-                asset.getAttributes().getOrCreate(TreeAsset.ROUTE_ID).setValue(0);
-                assetStorageService.merge(asset);
-                LOG.info("Resetting route ID to 0 for asset ID: " + asset.getId());
-            }
-        }
-    }
-
-    /**
-     * Extracts coordinates from a list of assets.
-     *
-     * @param assets List of assets to extract coordinates from.
-     * @return List of coordinates in [longitude, latitude] format.
-     */
-    private List<double[]> extractCoordinates(List<Asset<?>> assets) {
-        List<double[]> coordinates = new ArrayList<>();
-        assets.forEach(asset -> {
-            Optional<Attribute<?>> locationAttribute = asset.getAttributes().get("location");
-            locationAttribute.ifPresent(attr -> {
-                GeoJSONPoint point = (GeoJSONPoint) attr.getValue().orElse(null);
-                if (point != null) {
-                    coordinates.add(new double[]{point.getX(), point.getY()});
-                }
-            });
-        });
-        return coordinates;
-    }
-
-    /**
-     * Orders assets based on the route response from the OpenRouteService API.
-     *
-     * @param routeResponse JSON response from the OpenRouteService API.
-     * @param assets        List of assets to order.
-     * @return Ordered list of assets based on the optimized route.
-     * @throws IOException throws exception
-     */
-    private List<Asset<?>> orderAssetsByRouteResponse(String routeResponse, List<Asset<?>> assets) throws IOException {
-        ObjectMapper mapper = new ObjectMapper();
-        JsonNode rootNode = mapper.readTree(routeResponse);
-
-        LOG.info("Root Node: " + rootNode.toPrettyString());
-
-        JsonNode stepsNode = rootNode.path("routes").get(0).path("steps");
-
-        Map<Integer, double[]> orderedCoordinates = new LinkedHashMap<>();
-        if (stepsNode.isArray()) {
-            for (JsonNode stepNode : stepsNode) {
-                int jobId = stepNode.path("job").asInt();
-                double[] coord = new double[2];
-                coord[0] = stepNode.path("location").get(0).asDouble();
-                coord[1] = stepNode.path("location").get(1).asDouble();
-                orderedCoordinates.put(jobId, coord);
-            }
-        }
-
-        return mapCoordinatesToAssets(orderedCoordinates, assets);
-    }
-
-    /**
-     * Maps the ordered coordinates to their corresponding assets.
-     *
-     * @param orderedCoordinates Map of job ID to coordinates.
-     * @param assets             List of assets to map.
-     * @return List of assets ordered by the provided coordinates.
-     */
-    private List<Asset<?>> mapCoordinatesToAssets(Map<Integer, double[]> orderedCoordinates, List<Asset<?>> assets) {
-        Map<String, Asset<?>> coordinatesToAssetsMap = new HashMap<>();
-        for (Asset<?> asset : assets) {
-            double[] assetCoordinates = extractCoordinatesFromAsset(asset);
-            String key = Arrays.toString(assetCoordinates);
-            coordinatesToAssetsMap.put(key, asset);
-        }
-
-        List<Asset<?>> orderedAssets = new ArrayList<>();
-        for (Map.Entry<Integer, double[]> entry : orderedCoordinates.entrySet()) {
-            String key = Arrays.toString(entry.getValue());
-            if (coordinatesToAssetsMap.containsKey(key)) {
-                Asset<?> asset = coordinatesToAssetsMap.get(key);
-                if (!orderedAssets.contains(asset)) {
-                    orderedAssets.add(asset);
-                }
-            }
-        }
-
-        // Ensure no duplicates and exactly 10 assets
-        Set<Asset<?>> uniqueAssets = new LinkedHashSet<>(orderedAssets);
-        if (uniqueAssets.size() < 10) {
-            assets.stream()
-                    .filter(asset -> !uniqueAssets.contains(asset))
-                    .limit(10 - uniqueAssets.size())
-                    .forEach(uniqueAssets::add);
-        }
-
-        LOG.info("Total assets after mapping: " + uniqueAssets.size());
-        return new ArrayList<>(uniqueAssets);
-    }
-
-    /**
-     * Extracts coordinates from a single asset.
-     *
-     * @param asset The asset to extract coordinates from.
-     * @return Coordinates of the asset in [longitude, latitude] format.
-     */
-    private double[] extractCoordinatesFromAsset(Asset<?> asset) {
-        Optional<Attribute<?>> locationAttribute = asset.getAttributes().get("location");
-        if (locationAttribute.isPresent()) {
-            GeoJSONPoint point = (GeoJSONPoint) locationAttribute.get().getValue().orElse(null);
+   /**
+    * Extracts coordinates from a list of assets.
+    *
+    * @param assets List of assets to extract coordinates from.
+    * @return List of coordinates in [longitude, latitude] format.
+    */
+   private List<double[]> extractCoordinates(List<Asset<?>> assets) {
+      List<double[]> coordinates = new ArrayList<>();
+      assets.forEach(asset -> {
+         Optional<Attribute<?>> locationAttribute = asset.getAttributes().get("location");
+         locationAttribute.ifPresent(attr -> {
+            GeoJSONPoint point = (GeoJSONPoint) attr.getValue().orElse(null);
             if (point != null) {
-                return new double[]{point.getX(), point.getY()};
+               coordinates.add(new double[]{point.getX(), point.getY()});
             }
-        }
-        return null;
-    }
+         });
+      });
+      return coordinates;
+   }
 
-    /**
-     * Prints the ordered list of assets.
-     *
-     * @param assets List of ordered assets.
-     */
-    private void printOrderedAssets(List<Asset<?>> assets, String attributeName) {
-        LOG.info("Ordered visitation list:");
-        assets.forEach(asset -> LOG.info("Visit Asset ID: " + asset.getId() + " - "
-                + asset.getName() + " - " + asset.getAttribute(attributeName)));
-    }
+   /**
+    * Orders assets based on the route response from the OpenRouteService API.
+    *
+    * @param routeResponse JSON response from the OpenRouteService API.
+    * @param assets        List of assets to order.
+    * @return Ordered list of assets based on the optimized route.
+    * @throws IOException throws exception
+    */
+   private List<Asset<?>> orderAssetsByRouteResponse(String routeResponse, List<Asset<?>> assets) throws IOException {
+      ObjectMapper mapper = new ObjectMapper();
+      JsonNode rootNode = mapper.readTree(routeResponse);
 
-    /**
-     * Generates a Google Maps URL for the given list of coordinates.
-     *
-     * @param coordinates List of coordinates to include in the URL.
-     * @return Google Maps URL for the route.
-     */
-    public String generateGoogleMapsURL(List<double[]> coordinates) {
-        StringBuilder url = new StringBuilder("https://www.google.com/maps/dir/");
-        coordinates.forEach(coord -> url.append(coord[1]).append(",").append(coord[0]).append("/"));
-        return url.toString();
-    }
+      LOG.info("Root Node: " + rootNode.toPrettyString());
+
+      JsonNode stepsNode = rootNode.path("routes").get(0).path("steps");
+
+      Map<Integer, double[]> orderedCoordinates = new LinkedHashMap<>();
+      if (stepsNode.isArray()) {
+         for (JsonNode stepNode : stepsNode) {
+            int jobId = stepNode.path("job").asInt();
+            double[] coord = new double[2];
+            coord[0] = stepNode.path("location").get(0).asDouble();
+            coord[1] = stepNode.path("location").get(1).asDouble();
+            orderedCoordinates.put(jobId, coord);
+         }
+      }
+
+      return mapCoordinatesToAssets(orderedCoordinates, assets);
+   }
+
+   /**
+    * Maps the ordered coordinates to their corresponding assets.
+    *
+    * @param orderedCoordinates Map of job ID to coordinates.
+    * @param assets             List of assets to map.
+    * @return List of assets ordered by the provided coordinates.
+    */
+   private List<Asset<?>> mapCoordinatesToAssets(Map<Integer, double[]> orderedCoordinates, List<Asset<?>> assets) {
+      Map<String, Asset<?>> coordinatesToAssetsMap = new HashMap<>();
+      for (Asset<?> asset : assets) {
+         double[] assetCoordinates = extractCoordinatesFromAsset(asset);
+         String key = Arrays.toString(assetCoordinates);
+         coordinatesToAssetsMap.put(key, asset);
+      }
+
+      List<Asset<?>> orderedAssets = new ArrayList<>();
+      for (Map.Entry<Integer, double[]> entry : orderedCoordinates.entrySet()) {
+         String key = Arrays.toString(entry.getValue());
+         if (coordinatesToAssetsMap.containsKey(key)) {
+            Asset<?> asset = coordinatesToAssetsMap.get(key);
+            if (!orderedAssets.contains(asset)) {
+               orderedAssets.add(asset);
+            }
+         }
+      }
+
+      // Ensure no duplicates and exactly 10 assets
+      Set<Asset<?>> uniqueAssets = new LinkedHashSet<>(orderedAssets);
+      if (uniqueAssets.size() < 10) {
+         assets.stream()
+                 .filter(asset -> !uniqueAssets.contains(asset))
+                 .limit(10 - uniqueAssets.size())
+                 .forEach(uniqueAssets::add);
+      }
+
+      LOG.info("Total assets after mapping: " + uniqueAssets.size());
+      return new ArrayList<>(uniqueAssets);
+   }
+
+   /**
+    * Extracts coordinates from a single asset.
+    *
+    * @param asset The asset to extract coordinates from.
+    * @return Coordinates of the asset in [longitude, latitude] format.
+    */
+   private double[] extractCoordinatesFromAsset(Asset<?> asset) {
+      Optional<Attribute<?>> locationAttribute = asset.getAttributes().get("location");
+      if (locationAttribute.isPresent()) {
+         GeoJSONPoint point = (GeoJSONPoint) locationAttribute.get().getValue().orElse(null);
+         if (point != null) {
+            return new double[]{point.getX(), point.getY()};
+         }
+      }
+      return null;
+   }
+
+   /**
+    * Prints the ordered list of assets.
+    *
+    * @param assets List of ordered assets.
+    */
+   private void printOrderedAssets(List<Asset<?>> assets, String attributeName) {
+      LOG.info("Ordered visitation list:");
+      assets.forEach(asset -> LOG.info("Visit Asset ID: " + asset.getId() + " - "
+              + asset.getName() + " - " + asset.getAttribute(attributeName)));
+   }
+
+   /**
+    * Generates a Google Maps URL for the given list of coordinates.
+    *
+    * @param coordinates List of coordinates to include in the URL.
+    * @return Google Maps URL for the route.
+    */
+   public String generateGoogleMapsURL(List<double[]> coordinates) {
+      StringBuilder url = new StringBuilder("https://www.google.com/maps/dir/");
+      coordinates.forEach(coord -> url.append(coord[1]).append(",").append(coord[0]).append("/"));
+      return url.toString();
+   }
 }
 ```
 
@@ -974,50 +1013,55 @@ public class RouteService implements ContainerService {
 
 #### RouteApiClient
 
-The RouteApiClient is responsible for making HTTP requests to the OpenRouteService API.
+The `RouteApiClient` manages the HTTP requests to the OpenRouteService API. It constructs the request with appropriate
+headers and payloads, sends the request, and handles the response. This class is essential for maintaining the
+connection to the external service and ensuring that TreeOrg's routing requests are processed efficiently. The client
+also handles rate limiting information provided by the API, ensuring compliance with usage policies.
+
 <details>
 <summary>View Code</summary>
 
 ````java
 public class RouteApiClient implements ContainerService {
 
-    private static final Logger LOG = Logger.getLogger(RouteApiClient.class.getName());
-    private static final String ORS_API_KEY = "5b3ce3597851110001cf6248a3a8675f23d74b67a8e01dfe64f8d363";
+   private static final Logger LOG = Logger.getLogger(RouteApiClient.class.getName());
+   private static final String ORS_API_KEY = "Your_Api_Key_Here";
 
-    @Override
-    public void init(Container container) throws Exception {
+   @Override
+   public void init(Container container) throws Exception {
 
-    }
+   }
 
-    @Override
-    public void start(Container container) throws Exception {
+   @Override
+   public void start(Container container) throws Exception {
 
-    }
+   }
 
-    @Override
-    public void stop(Container container) throws Exception {
+   @Override
+   public void stop(Container container) throws Exception {
 
-    }
+   }
 
-    public String callOpenRouteService(String query) throws IOException, InterruptedException {
-        HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("https://api.openrouteservice.org/optimization"))
-                .header("Content-Type", "application/json")
-                .header("Authorization", "Bearer " + ORS_API_KEY)
-                .POST(HttpRequest.BodyPublishers.ofString(query))
-                .build();
+   public String callOpenRouteService(String query) throws IOException, InterruptedException {
+      HttpClient client = HttpClient.newHttpClient();
+      HttpRequest request = HttpRequest.newBuilder()
+              .uri(URI.create("https://api.openrouteservice.org/optimization"))
+              .header("Content-Type", "application/json")
+              .header("Authorization", "Bearer " + ORS_API_KEY)
+              .POST(HttpRequest.BodyPublishers.ofString(query))
+              .build();
 
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+      HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
-        String rateLimitRemaining = response.headers().firstValue("X-Ratelimit-Remaining").orElse("unknown");
-        String rateLimitReset = response.headers().firstValue("X-Ratelimit-Reset").orElse("unknown");
+      String rateLimitRemaining = response.headers().firstValue("X-Ratelimit-Remaining").orElse("unknown");
+      String rateLimitReset = response.headers().firstValue("X-Ratelimit-Reset").orElse("unknown");
 
-        LOG.info("Rate Limit Remaining: " + rateLimitRemaining);
-        LOG.info("Rate Limit Resets At: " + rateLimitReset);
+      LOG.info("Rate Limit Remaining: " + rateLimitRemaining);
+      LOG.info("Rate Limit Resets At: " + rateLimitReset);
 
-        return response.body();
-    }
+      return response.body();
+   }
+
 }
 
 ````
@@ -1026,7 +1070,9 @@ public class RouteApiClient implements ContainerService {
 
 #### RouteResponse
 
-The RouteResponse class holds the response data including the Google Maps URL and the ordered list of assets.
+The `RouteResponse` class encapsulates the data returned from the OpenRouteService API, including the Google Maps URL
+for the optimized route and the ordered list of assets. This structured response makes it easy to present the optimized
+route to end-users and integrate it with other parts of the system.
 <details>
 <summary>View Code</summary>
 
@@ -1057,6 +1103,129 @@ public class RouteResponse {
     }
 }
 ```
+</details>
+
+#### Update The Resource Interface and Implementation
+
+##### TreeOrgResource Interface
+
+The `TreeOrgResource` interface defines the endpoints for the custom API. These endpoints include methods for sorting
+assets by a specified attribute and for optimizing routes based on asset data. By defining these methods, the interface
+establishes a contract that the implementation class must fulfill, ensuring consistency and reliability in the API's
+behavior.
+
+##### TreeOrgResourceImplementation
+
+The `TreeOrgResourceImplementation` class provides the actual functionality behind the API endpoints defined in
+the `TreeOrgResource` interface. It uses the `SortingService` to sort assets and the `RouteOptimizationService` to
+optimize routes. By implementing these endpoints, the class allows external clients to request sorted asset lists and
+optimized routes dynamically. This flexibility is crucial for integrating TreeOrg's system with other tools and services
+used in urban forestry management.
+
+##### Integration with TreeOrgRestService
+
+The `TreeOrgRestService` class registers the `TreeOrgResourceImplementation` with the system, ensuring that the API is
+available and accessible. This integration involves adding the implementation to the web service, making it part of the
+overall API framework. By doing so, TreeOrg ensures that the custom API endpoints are properly initialized and can
+handle requests as soon as the system starts up.
+<details>
+<summary>View Code</summary>
+
+````java
+public interface TreeOrgResource {
+
+   Response sortAssetsByAttribute(String assetType, String attributeName);
+
+   Response optimizeRouteForSensors(String assetType, String attributeName);
+}
+
+package org.openremote.manager.treeorg;
+
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
+import org.openremote.model.asset.Asset;
+import org.openremote.model.treeorg.TreeOrgResource;
+
+import java.util.List;
+
+@Path("/")
+public class TreeOrgResourceImplementation implements TreeOrgResource {
+
+   private final SortingService sortingService;
+   private final RouteOptimizationService routeOptimizationService;
+
+   public TreeOrgResourceImplementation(SortingService sortingService, RouteOptimizationService routeOptimizationService) {
+      this.sortingService = sortingService;
+      this.routeOptimizationService = routeOptimizationService;
+   }
+
+   @GET
+   @Path("sortbyattribute")
+   @Produces(MediaType.APPLICATION_JSON)
+   public Response sortAssetsByAttribute(@QueryParam("assetType") String assetType, @QueryParam("attribute") String attributeName) {
+      Class<?> type = null;
+      try {
+         type = Class.forName(assetType);
+      } catch (ClassNotFoundException e) {
+         throw new RuntimeException(e);
+      }
+      List<Asset<?>> sortedAssets = sortingService.findAllAssetsSortedByAttributeAndType(type, attributeName);
+      return Response.ok(sortedAssets).build();
+   }
+
+   @GET
+   @Path("optimizeRoute")
+   @Produces(MediaType.APPLICATION_JSON)
+   public Response optimizeRouteForSensors(@QueryParam("assetType") String assetType, @QueryParam("attribute") String attributeName) {
+      Class<?> type = null;
+      try {
+         type = Class.forName(assetType);
+      } catch (ClassNotFoundException e) {
+         throw new RuntimeException(e);
+      }
+      RouteResponse routeResponse = routeOptimizationService.optimizeRouteForSensors(type, attributeName);
+      return Response.ok(routeResponse).build();
+   }
+}
+
+public class TreeOrgRestService implements ContainerService {
+   private static final Logger LOG = Logger.getLogger(ManagerWebService.class.getName());
+   protected AssetStorageService assetStorageService;
+   protected SortingService sortingService;
+   protected RouteOptimizationService routeOptimizationService;
+   protected RouteService routeService;
+   protected RouteApiClient routeApiClient;
+
+   @Override
+   public void init(Container container) throws Exception {
+      ManagerWebService webService = container.getService(ManagerWebService.class);
+      assetStorageService = container.getService(AssetStorageService.class);
+      sortingService = container.getService(SortingService.class);
+
+      routeService = container.getService(RouteService.class);
+      routeOptimizationService = container.getService(RouteOptimizationService.class);
+      routeApiClient = container.getService(RouteApiClient.class);
+      webService.addApiSingleton(new TreeOrgResourceImplementation(sortingService, routeOptimizationService));
+      LOG.info("Registered custom API classes: " + sortingService);
+   }
+
+   @Override
+   public void start(Container container) throws Exception {
+
+   }
+
+   @Override
+   public void stop(Container container) throws Exception {
+
+   }
+
+}
+
+````
 
 </details>
 

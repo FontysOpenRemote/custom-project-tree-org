@@ -18,7 +18,6 @@ import java.util.*;
 import java.util.logging.Logger;
 
 import static org.openremote.model.asset.Asset.NOTES;
-
 public class RouteService implements ContainerService {
 
     private AssetStorageService assetStorageService;
@@ -27,7 +26,6 @@ public class RouteService implements ContainerService {
     private Map<Integer, String> jobIdToAssetIdMap = new HashMap<>();
 
     public RouteService() {
-
     }
 
     @Override
@@ -46,6 +44,13 @@ public class RouteService implements ContainerService {
         // Any cleanup logic if needed
     }
 
+    /**
+     * Optimizes the route for a list of sorted assets based on a specified attribute.
+     *
+     * @param sortedAssets  A list of sorted assets to optimize the route for.
+     * @param attributeName The name of the attribute used for sorting.
+     * @return A RouteResponse containing the Google Maps URL for the optimized route and the ordered assets.
+     */
     public RouteResponse optimizeRouteForSortedAssets(List<Asset<?>> sortedAssets, String attributeName) {
         List<double[]> coordinates = extractCoordinates(sortedAssets);
 
@@ -75,6 +80,14 @@ public class RouteService implements ContainerService {
     }
 
 
+    /**
+     * Prepares the TSP (Travelling Salesperson Problem) query for the OpenRouteService API.
+     *
+     * @param coordinates      A list of coordinates for the assets in [longitude, latitude] format.
+     * @param sortedSensors    A list of sorted assets that represent the sensors.
+     * @param startingPosition The starting position for the route in [longitude, latitude] format.
+     * @return A JSON string representing the TSP query.
+     */
     private String prepareTSPQuery(List<double[]> coordinates, List<Asset<?>> sortedSensors, double[] startingPosition) {
         ObjectMapper mapper = new ObjectMapper();
         ObjectNode payload = mapper.createObjectNode();
@@ -119,7 +132,6 @@ public class RouteService implements ContainerService {
         }
     }
 
-
     private Asset<?> findParentAsset(List<Asset<?>> sortedAssets) {
         for (Asset<?> asset : sortedAssets) {
             String parentId = asset.getParentId();
@@ -130,7 +142,6 @@ public class RouteService implements ContainerService {
         LOG.severe("Parent asset not found");
         return null;
     }
-
 
     /**
      * Updates the routeId attribute of each asset in the ordered list and resets routeId to 0 for other assets.
@@ -143,29 +154,34 @@ public class RouteService implements ContainerService {
             assetIdToRouteIdMap.put(orderedAssets.get(i).getId(), i + 1);
         }
 
-        AssetQuery query = new AssetQuery().types(TreeAsset.class);
-        List<Asset<?>> allAssets = assetStorageService.findAll(query);
+        // Convert the list of asset IDs to an array
+        String[] assetIdsArray = assetIdToRouteIdMap.keySet().toArray(new String[0]);
 
-        for (Asset<?> asset : allAssets) {
+        // Find the relevant assets by their IDs
+        AssetQuery query = new AssetQuery().types(TreeAsset.class).ids(assetIdsArray);
+        List<Asset<?>> relevantAssets = assetStorageService.findAll(query);
+
+        // Update routeId attributes for relevant assets
+        for (Asset<?> asset : relevantAssets) {
             Integer newRouteId = assetIdToRouteIdMap.get(asset.getId());
-            Optional<Integer> currentRouteId = asset.getAttributes().get(TreeAsset.ROUTE_ID)
-                    .map(Attribute::getValue)
-                    .map(Optional::get)
-                    .map(Integer.class::cast);
+            asset.getAttributes().getOrCreate(TreeAsset.ROUTE_ID).setValue(newRouteId);
+            assetStorageService.merge(asset);
+            LOG.info("Setting route ID " + newRouteId + " for asset: " + asset.getName());
+        }
 
-            if (newRouteId != null) {
-                if (!currentRouteId.isPresent() || !currentRouteId.get().equals(newRouteId)) {
-                    asset.getAttributes().getOrCreate(TreeAsset.ROUTE_ID).setValue(newRouteId);
+        // Reset routeId for assets not in the ordered list
+        for (String assetId : assetIdToRouteIdMap.keySet()) {
+            if (!assetIdToRouteIdMap.containsKey(assetId)) {
+                Asset<?> asset = assetStorageService.find(assetId);
+                if (asset != null) {
+                    asset.getAttributes().getOrCreate(TreeAsset.ROUTE_ID).setValue(0);
                     assetStorageService.merge(asset);
-                    LOG.info("Setting route ID " + newRouteId + " for asset: " + asset.getName());
+                    LOG.info("Resetting route ID to 0 for asset ID: " + asset.getId());
                 }
-            } else if (currentRouteId.isPresent() && currentRouteId.get() != 0) {
-                asset.getAttributes().getOrCreate(TreeAsset.ROUTE_ID).setValue(0);
-                assetStorageService.merge(asset);
-                LOG.info("Resetting route ID to 0 for asset ID: " + asset.getId());
             }
         }
     }
+
 
     /**
      * Extracts coordinates from a list of assets.
@@ -296,3 +312,4 @@ public class RouteService implements ContainerService {
         return url.toString();
     }
 }
+
