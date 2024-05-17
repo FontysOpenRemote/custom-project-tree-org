@@ -13,7 +13,7 @@ Welcome to the TreeOrg tutorial! In this guide, we will show you how to set up a
     - [Custom APIs](#custom-apis)
 5. [Advanced Topics](#advanced-topics)
     - [Integration with External Services](#integration-with-external-services)
-    - [Performance Optimization](#performance-optimization)
+   - [Creating Custom Widgets](#creating-custom-widgets)
 6. [FAQ and Troubleshooting](#faq-and-troubleshooting)
 
 ## Introduction
@@ -32,57 +32,58 @@ Before starting, ensure you have the following installed:
 ## Step 1: Forking and Cloning the Repository
 
 1. **Fork the Repository**
-   - Navigate to the [OpenRemote custom project repository](https://github.com/openremote/custom-project) on GitHub.
-   - Click the "Fork" button to create your own copy of the repository.
+    - Navigate to the [OpenRemote custom project repository](https://github.com/openremote/custom-project) on GitHub.
+    - Click the "Fork" button to create your own copy of the repository.
 
 2. **Clone the Forked Repository**
-   - Open your terminal and clone your forked repository:
-     ```sh
-     git clone https://github.com/yourusername/custom-project-tree-org.git
-     cd custom-project-tree-org
-     ```
+    - Open your terminal and clone your forked repository:
+      ```sh
+      git clone https://github.com/yourusername/custom-project-tree-org.git
+      cd custom-project-tree-org
+      ```
 [Back to Top](#treeorg-tutorial-setting-up-a-custom-project-with-openremote)
 ## Step 2: Setting Up Your Development Environment
 
 1. **Load the Repository into IntelliJ**
-   - Open IntelliJ IDEA and click `Open` to load the `custom-project-tree-org` directory.
+    - Open IntelliJ IDEA and click `Open` to load the `custom-project-tree-org` directory.
 
 2. **Install Dependencies**
-   - Open the terminal within IntelliJ and run:
-     ```sh
-     yarn install
-     ```
+    - Open the terminal within IntelliJ and run:
+      ```sh
+      yarn install
+      ```
 
 3. **Add OpenRemote as a Submodule**
-   - Add the OpenRemote repository as a submodule:
-     ```sh
-     git submodule add
-     git submodule update
-     ```
+    - Add the OpenRemote repository as a submodule:
+      ```sh
+      git submodule add
+      git submodule update
+      ```
 4. **Confirm settings**
-   - Verify that the Gradle buildtools are set to use Intellij:
-   - Preferences/Build,Execution,Deployment/Build Tools/Gradle -> set Build and Run & Run tests using to Intellij if they are not and apply.
+    - Verify that the Gradle buildtools are set to use Intellij:
+    - Preferences/Build,Execution,Deployment/Build Tools/Gradle -> set Build and Run & Run tests using to Intellij if
+      they are not and apply.
 
 ## Step 3: Running the Application
 
 1. **Run Backend with Custom Deployment Configuration**
-   - In IntelliJ, select the `Custom Deployment` run configuration for the backend.
-   - Click the run button to start the backend service.
+    - In IntelliJ, select the `Custom Deployment` run configuration for the backend.
+    - Click the run button to start the backend service.
 
 2. **Run the Manager UI**
-   - Open a new terminal in IntelliJ.
-   - Navigate to the UI directory:
-     ```sh
-     cd openremote/ui/app/manager
-     ```
-   - Run the UI using npm:
-     ```sh
-     npm run serve
-     ```
+    - Open a new terminal in IntelliJ.
+    - Navigate to the UI directory:
+      ```sh
+      cd openremote/ui/app/manager
+      ```
+    - Run the UI using npm:
+      ```sh
+      npm run serve
+      ```
 
 3. **Verify Setup**
-   - Open a web browser and navigate to `http://localhost:9000/manager/`.
-   - You should see the Manager UI with the default setup, confirming that the application is running correctly.
+    - Open a web browser and navigate to `http://localhost:9000/manager/`.
+    - You should see the Manager UI with the default setup, confirming that the application is running correctly.
 
 [Back to Top](#treeorg-tutorial-setting-up-a-custom-project-with-openremote)
 # Creating the TreeOrg Realm
@@ -96,17 +97,22 @@ In this section, we will create the TreeOrg setup. This setup will help us manag
 ### Step 1: Create TreeOrg Package
 
 1. **Navigate to the Setup Package**
-   - From the root of the `custom-project`, navigate to `setup/src/main/java/org/openremote/manager/setup`.
+    - From the root of the `custom-project`, navigate to `setup/src/main/java/org/openremote/manager/setup`.
 
 2. **Create TreeOrg Package**
-   - Create a new package named `treeorg`.
+    - Create a new package named `treeorg`.
 
 ### Step 2: Create TreeOrgSetupTasks Class
 
 1. **Create TreeOrgSetupTasks Class**
-   - This class defines the setup tasks for the TreeOrg realm, including initializing the Keycloak, Manager, and Rules setups. It determines which tasks to run based on the environment (e.g., production or development).
-   - In the `treeorg` package, create a new class called `TreeOrgSetupTasks`
-     ```java
+    - This class defines the setup tasks for the TreeOrg realm, including initializing the Keycloak, Manager, and Rules
+      setups. It determines which tasks to run based on the environment (e.g., production or development).
+    - In the `treeorg` package, create a new class called `TreeOrgSetupTasks`
+
+<details>
+<summary>View Code</summary>
+
+```java
      public class TreeOrgSetupTasks implements SetupTasks {
 
          public static final String PRODUCTION = "production";
@@ -123,14 +129,21 @@ In this section, we will create the TreeOrg setup. This setup will help us manag
              );
          }
      }
-     ```
+```
+
+</details>
 
 ### Step 3: Create TreeOrgKeycloakSetup Class
 
 1. **Create TreeOrgKeycloakSetup Class**
-   - This class handles the creation of the TreeOrg Keycloak realm and user setup. It configures authentication settings and creates a default user with specified roles for the TreeOrg realm.
-   - In the `treeorg` package, create a new class called `TreeOrgKeycloakSetup`.
-     ```java
+    - This class handles the creation of the TreeOrg Keycloak realm and user setup. It configures authentication
+      settings and creates a default user with specified roles for the TreeOrg realm.
+    - In the `treeorg` package, create a new class called `TreeOrgKeycloakSetup`.
+
+<details>
+<summary>View Code</summary>
+
+```java
      public class TreeOrgKeycloakSetup extends AbstractKeycloakSetup {
 
          public static final String TREEORG_USER_PASSWORD = "TREEORG_USER_PASSWORD";
@@ -160,14 +173,20 @@ In this section, we will create the TreeOrg setup. This setup will help us manag
                      });
          }
      }
-     ```
+```
+
+</details>
 
 ### Step 4: Create TreeOrgManagerSetup Class
 
 1. **Create TreeOrgManagerSetup Class**
-   - This class sets up the TreeOrg Manager environment, including creating initial assets for the realm.
-   - In the `treeorg` package, create a new class called `TreeOrgManagerSetup`
-     ```java
+    - This class sets up the TreeOrg Manager environment, including creating initial assets for the realm.
+    - In the `treeorg` package, create a new class called `TreeOrgManagerSetup`
+
+<details>
+<summary>View Code</summary>
+
+```java
      public class TreeOrgManagerSetup extends ManagerSetup {
 
          public TreeOrgManagerSetup(Container container) {
@@ -193,37 +212,39 @@ In this section, we will create the TreeOrg setup. This setup will help us manag
              assetStorageService.merge(treeOrgAssets);
          }
      }
-     ```
+```
+
+</details>
 
 ### Step 5: Register TreeOrgSetupTasks
 
 1. **Register TreeOrgSetupTasks Class**
-   - Open the file at `setup/src/main/resources/META-INF/services/`.
-   - Add the following line to register the `TreeOrgSetupTasks`:
-     ```
-     org.openremote.manager.setup.treeorg.TreeOrgSetupTasks
-     ```
+    - Open the file at `setup/src/main/resources/META-INF/services/`.
+    - Add the following line to register the `TreeOrgSetupTasks`:
+      ```
+      org.openremote.manager.setup.treeorg.TreeOrgSetupTasks
+      ```
 
 ### Step 6: Run the Application
 
 1. **Start Backend**
-   - In IntelliJ, select the `Custom Deployment` run configuration for the backend.
-   - Click the run button to start the backend service.
+    - In IntelliJ, select the `Custom Deployment` run configuration for the backend.
+    - Click the run button to start the backend service.
 
 2. **Run the Manager UI**
-   - Open a new terminal in IntelliJ.
-   - Navigate to the UI directory:
-     ```sh
-     cd openremote/ui/app/manager
-     ```
-   - Run the UI using npm:
-     ```sh
-     npm run serve
-     ```
+    - Open a new terminal in IntelliJ.
+    - Navigate to the UI directory:
+      ```sh
+      cd openremote/ui/app/manager
+      ```
+    - Run the UI using npm:
+      ```sh
+      npm run serve
+      ```
 
 3. **Verify Setup**
-   - Open a web browser and navigate to `http://localhost:9000/manager/` (ensure the trailing slash is included).
-   - You should see your newly built realm and one asset in the asset window.
+    - Open a web browser and navigate to `http://localhost:9000/manager/` (ensure the trailing slash is included).
+    - You should see your newly built realm and one asset in the asset window.
 
 ---
 
@@ -246,6 +267,9 @@ Here is a brief overview and the code for the `TreeAsset` class:
 This TreeAsset class includes attributes such as soil temperature and water level, which are essential for monitoring the health and maintenance needs of a tree. These attributes are set to be read-only to prevent unauthorized modification. The tree type, route ID, and priority can be used to manage maintenance schedules and routing for care personnel based on the tree's conditions and needs.
 
 By extending the Asset<TreeAsset>, this custom asset leverages the existing framework capabilities like handling names, locations, and other standard properties, allowing for easy integration and management within the OpenRemote environment.
+
+<details>
+<summary>View Code</summary>
 
 ```java
 @Entity
@@ -307,6 +331,9 @@ public class TreeAsset extends Asset<TreeAsset> {
     }
 }
 ```
+
+</details>
+
 ### Integrating TreeAssets into the Realm
 
 With the `TreeAsset` class in place, the next step is to integrate these assets into our realm. In the `TreeOrgManagerSetup` class, we implement logic to create `TreeAssets` around a specific location, such as Eindhoven. Here is a detailed look at the process:
@@ -316,6 +343,9 @@ With the `TreeAsset` class in place, the next step is to integrate these assets 
 The `TreeOrgManagerSetup` class includes methods to create and manage `TreeAssets` dynamically. This implementation results in a group of 100 TreeAssets, all associated under the ThingAsset "TreeOrg Assets". These assets are randomly placed around the city based on the specified base location, creating a realistic deployment pattern.
 
 By utilizing this setup, we can efficiently simulate a realistic environment where each TreeAsset represents a physical tree, equipped with sensors, within the city of Eindhoven. Below is the code and explanation of its functionality:
+
+<details>
+<summary>View Code</summary>
 
 ```java
 public class TreeOrgManagerSetup extends ManagerSetup {
@@ -404,9 +434,14 @@ public class TreeOrgManagerSetup extends ManagerSetup {
 }
 ```
 
+</details>
+
 ### Updating The Map for Enhanced Visualization
 
 Once our `TreeAssets` are in place, the default map may no longer suffice due to the lack of detailed MBTiles for the Eindhoven area, especially at the appropriate zoom levels. To address this, you will need to update your map data. Comprehensive guidance on acquiring and setting up the appropriate MBTiles can be found in the OpenRemote [Developer Guide: Working on Maps](https://github.com/openremote/openremote/wiki/Developer-Guide%3A-Working-on-maps). After obtaining the `mapdata.mbtiles` file that fits our needs, place it in the `deployment/map` directory. Subsequently, you should update the `mapsettings.json` file to reflect the new map configuration, specifically adding some options for your Realm. This ensures that the map accurately displays the geographic distribution and details of our `TreeAssets`, enhancing the user interface and interaction.
+
+<details>
+<summary>View Code</summary>
 
 ```json
     {
@@ -421,6 +456,8 @@ Once our `TreeAssets` are in place, the default map may no longer suffice due to
   }
 }
 ```
+
+</details>
 
 [Back to Top](#treeorg-tutorial-setting-up-a-custom-project-with-openremote)
 
@@ -440,6 +477,8 @@ Here's a brief look at how the service is implemented:
 - **Logging**: For operational transparency, the service logs the results of the sorting process, providing clear and actionable insights into which assets have the lowest water levels and thus, higher priority for maintenance.
 - **Service Registration**: To ensure proper integration, the `SortingService` must be registered within the OpenRemote system. This is done by adding `org.openremote.manager.treeorg.SortingService` to the service manifest located in the `META-INF/services` directory.
 
+<details>
+<summary>View Code</summary>
 
 ```java
 public class SortingService implements ContainerService {
@@ -496,6 +535,8 @@ public class SortingService implements ContainerService {
 }
 ```
 
+</details>
+
 By implementing the `SortingService`, TreeOrg not only advances its asset management capabilities but also enhances its responsiveness to environmental conditions affecting urban forestry management. This service exemplifies how custom solutions can be tailored to meet specific operational needs within the broader framework of OpenRemote's IoT management platform.
 
 [Back to Top](#treeorg-tutorial-setting-up-a-custom-project-with-openremote)
@@ -508,12 +549,21 @@ As part of our commitment to enhancing TreeOrg's technological infrastructure, w
 
 The `TreeOrgResource` interface, located in the model folder, defines the necessary endpoint for sorting assets:
 
+<details>
+<summary>View Code</summary>
+
 ```java
 public interface TreeOrgResource {
     Response sortAssetsByAttribute(String assetType, String attributeName);
 }
 ```
+
+</details>
+
 This interface is implemented in the TreeOrgResourceImplementation class within the manager folder, which provides the functionality to sort assets by attributes through a RESTful service:
+
+<details>
+<summary>View Code</summary>
 
 ```java
 @Path("/")
@@ -541,8 +591,14 @@ public class TreeOrgResourceImplementation implements TreeOrgResource {
     }
 }
 ```
+
+</details>
+
 Integration with TreeOrgRestService
 To ensure that this API is integrated and available for use, the TreeOrgResourceImplementation is registered within our system through the TreeOrgRestService:
+
+<details>
+<summary>View Code</summary>
 
 ```java
 public class TreeOrgRestService implements ContainerService {
@@ -559,6 +615,9 @@ public class TreeOrgRestService implements ContainerService {
     }
 }
 ```
+
+</details>
+
 This service setup ensures that our custom API is properly instantiated and made available through the ManagerWebService at the application startup. By creating this dedicated endpoint, TreeOrg enhances its operational capabilities, providing stakeholders with direct, efficient access to real-time data and asset management functionalities.
 
 Accessing the Endpoint
@@ -571,16 +630,442 @@ This will serve a response containing the 10 TreeAssets with the lowest water le
 [Back to Top](#treeorg-tutorial-setting-up-a-custom-project-with-openremote)
 ## Advanced Topics
 
-[Back to Top](#treeorg-tutorial-setting-up-a-custom-project-with-openremote)
-### Integration with External Services
-*Guide to integrating the TreeOrg project with external services.*
+In this section, we delve into advanced topics to enhance the functionality and efficiency of the TreeOrg project.
+
+### Integration With External Services
+
+To find the most efficient route between assets, TreeOrg aims to leverage OpenStreetMap's optimize API. To achieve this,
+we will create a `RouteOptimizationService` and a `RouteService` to handle route optimization and communication with the
+OpenRouteService API.
+
+#### RouteOptimizationService
+
+The `RouteOptimizationService` is responsible for orchestrating the route optimization process. It interacts with
+the `SortingService` to retrieve sorted assets and the `RouteService` to optimize the route based on these assets.
+
+<details>
+<summary>View Code</summary>
+
+```java
+public class RouteOptimizationService implements ContainerService {
+
+    private SortingService sortingService;
+    private RouteService routeService;
+
+    @Override
+    public void init(Container container) throws Exception {
+        this.sortingService = container.getService(SortingService.class);
+        this.routeService = container.getService(RouteService.class);
+    }
+
+    @Override
+    public void start(Container container) throws Exception {
+        // Perform initial optimization
+        optimizeRouteForSensors(TreeAsset.class, "waterLevel");
+        optimizeRouteForSensors(TreeAsset.class, "soilTemperature");
+    }
+
+    @Override
+    public void stop(Container container) {
+        // Any cleanup logic if needed
+    }
+
+    public RouteResponse optimizeRouteForSensors(Class<?> assetType, String attributeName) {
+        // Delegate finding and sorting to SortingService
+        List<Asset<?>> sortedSensors = sortingService.findAllAssetsSortedByAttributeAndType(assetType, attributeName);
+
+        // Delegate route optimization to RouteService
+        return routeService.optimizeRouteForSortedAssets(sortedSensors, attributeName);
+    }
+}
+```
+
+</details>
+
+#### RouteService
+
+The RouteService communicates with the OpenRouteService API to optimize the route between assets. It prepares the
+payload for the API request, handles the response, and updates the assets with the optimized route information.
+
+<details>
+<summary>View Code</summary>
+
+```java
+public class RouteService implements ContainerService {
+
+    private AssetStorageService assetStorageService;
+    private static final Logger LOG = Logger.getLogger(RouteService.class.getName());
+    private RouteApiClient routeApiClient;
+    private Map<Integer, String> jobIdToAssetIdMap = new HashMap<>();
+
+    public RouteService() {
+
+    }
+
+    @Override
+    public void init(Container container) throws Exception {
+        this.assetStorageService = container.getService(AssetStorageService.class);
+        this.routeApiClient = container.getService(RouteApiClient.class);
+    }
+
+    @Override
+    public void start(Container container) throws Exception {
+        // Any start logic if needed
+    }
+
+    @Override
+    public void stop(Container container) throws Exception {
+        // Any cleanup logic if needed
+    }
+
+    public RouteResponse optimizeRouteForSortedAssets(List<Asset<?>> sortedAssets, String attributeName) {
+        List<double[]> coordinates = extractCoordinates(sortedAssets);
+
+        double[] startingPosition = {5.453487298268298, 51.45081456926727};
+        String tspQuery = prepareTSPQuery(coordinates, sortedAssets, startingPosition);
+        try {
+            String routeResponse = routeApiClient.callOpenRouteService(tspQuery);
+            LOG.info("Route Response: " + routeResponse);
+            List<Asset<?>> orderedAssets = orderAssetsByRouteResponse(routeResponse, sortedAssets);
+            updateRouteIds(orderedAssets);
+            printOrderedAssets(orderedAssets, attributeName);
+
+            List<double[]> routeCoordinates = extractCoordinates(orderedAssets);
+            routeCoordinates.add(0, startingPosition); // Add starting position at the beginning
+            routeCoordinates.add(startingPosition); // Add starting position at the end
+
+            String googleMapsURL = generateGoogleMapsURL(routeCoordinates);
+            LOG.info("View route on Google Maps: " + googleMapsURL);
+
+            updateParentAssetWithGoogleMapsURL(googleMapsURL, sortedAssets);
+
+            return new RouteResponse(googleMapsURL, orderedAssets);
+        } catch (IOException | InterruptedException e) {
+            LOG.severe("Failed to call OpenRouteService: " + e.getMessage());
+            return null;
+        }
+    }
+
+
+    private String prepareTSPQuery(List<double[]> coordinates, List<Asset<?>> sortedSensors, double[] startingPosition) {
+        ObjectMapper mapper = new ObjectMapper();
+        ObjectNode payload = mapper.createObjectNode();
+        ArrayNode jobs = mapper.createArrayNode();
+        ArrayNode vehicles = mapper.createArrayNode();
+
+        ObjectNode vehicle = mapper.createObjectNode();
+        vehicle.put("id", 1);
+        vehicle.set("start", mapper.createArrayNode().add(startingPosition[0]).add(startingPosition[1]));
+        vehicle.put("return_to_depot", true);
+        vehicle.put("profile", "driving-car");
+        vehicles.add(vehicle);
+
+        for (int i = 0; i < coordinates.size(); i++) {
+            ObjectNode job = mapper.createObjectNode();
+            int jobId = i + 1;
+            job.put("id", jobId); // Use a unique integer as job ID
+            job.set("location", mapper.createArrayNode().add(coordinates.get(i)[0]).add(coordinates.get(i)[1]));
+            jobs.add(job);
+
+            // Map job ID to original asset ID for reference
+            jobIdToAssetIdMap.put(jobId, sortedSensors.get(i).getId());
+        }
+
+        payload.set("vehicles", vehicles);
+        payload.set("jobs", jobs);
+        return payload.toString();
+    }
+
+
+    /**
+     * Updates the Google Maps URL attribute for the relevant assets and clears it for others.
+     *
+     * @param googleMapsURL The Google Maps URL to set.
+     */
+    private void updateParentAssetWithGoogleMapsURL(String googleMapsURL, List<Asset<?>> sortedAssets) {
+        Asset<?> parentAsset = findParentAsset(sortedAssets);
+        if (parentAsset != null) {
+            parentAsset.getAttributes().getOrCreate(NOTES).setValue(googleMapsURL);
+            assetStorageService.merge(parentAsset);
+            LOG.info("Updated parent asset " + parentAsset.getName() + " ID: " + parentAsset.getId() + " with Google Maps URL");
+        }
+    }
+
+
+    private Asset<?> findParentAsset(List<Asset<?>> sortedAssets) {
+        for (Asset<?> asset : sortedAssets) {
+            String parentId = asset.getParentId();
+            if (parentId != null) {
+                return assetStorageService.find(parentId);
+            }
+        }
+        LOG.severe("Parent asset not found");
+        return null;
+    }
+
+
+    /**
+     * Updates the routeId attribute of each asset in the ordered list and resets routeId to 0 for other assets.
+     *
+     * @param orderedAssets The list of assets in the order of the optimized route.
+     */
+    private void updateRouteIds(List<Asset<?>> orderedAssets) {
+        Map<String, Integer> assetIdToRouteIdMap = new HashMap<>();
+        for (int i = 0; i < orderedAssets.size(); i++) {
+            assetIdToRouteIdMap.put(orderedAssets.get(i).getId(), i + 1);
+        }
+
+        AssetQuery query = new AssetQuery().types(TreeAsset.class);
+        List<Asset<?>> allAssets = assetStorageService.findAll(query);
+
+        for (Asset<?> asset : allAssets) {
+            Integer newRouteId = assetIdToRouteIdMap.get(asset.getId());
+            Optional<Integer> currentRouteId = asset.getAttributes().get(TreeAsset.ROUTE_ID)
+                    .map(Attribute::getValue)
+                    .map(Optional::get)
+                    .map(Integer.class::cast);
+
+            if (newRouteId != null) {
+                if (!currentRouteId.isPresent() || !currentRouteId.get().equals(newRouteId)) {
+                    asset.getAttributes().getOrCreate(TreeAsset.ROUTE_ID).setValue(newRouteId);
+                    assetStorageService.merge(asset);
+                    LOG.info("Setting route ID " + newRouteId + " for asset: " + asset.getName());
+                }
+            } else if (currentRouteId.isPresent() && currentRouteId.get() != 0) {
+                asset.getAttributes().getOrCreate(TreeAsset.ROUTE_ID).setValue(0);
+                assetStorageService.merge(asset);
+                LOG.info("Resetting route ID to 0 for asset ID: " + asset.getId());
+            }
+        }
+    }
+
+    /**
+     * Extracts coordinates from a list of assets.
+     *
+     * @param assets List of assets to extract coordinates from.
+     * @return List of coordinates in [longitude, latitude] format.
+     */
+    private List<double[]> extractCoordinates(List<Asset<?>> assets) {
+        List<double[]> coordinates = new ArrayList<>();
+        assets.forEach(asset -> {
+            Optional<Attribute<?>> locationAttribute = asset.getAttributes().get("location");
+            locationAttribute.ifPresent(attr -> {
+                GeoJSONPoint point = (GeoJSONPoint) attr.getValue().orElse(null);
+                if (point != null) {
+                    coordinates.add(new double[]{point.getX(), point.getY()});
+                }
+            });
+        });
+        return coordinates;
+    }
+
+    /**
+     * Orders assets based on the route response from the OpenRouteService API.
+     *
+     * @param routeResponse JSON response from the OpenRouteService API.
+     * @param assets        List of assets to order.
+     * @return Ordered list of assets based on the optimized route.
+     * @throws IOException throws exception
+     */
+    private List<Asset<?>> orderAssetsByRouteResponse(String routeResponse, List<Asset<?>> assets) throws IOException {
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode rootNode = mapper.readTree(routeResponse);
+
+        LOG.info("Root Node: " + rootNode.toPrettyString());
+
+        JsonNode stepsNode = rootNode.path("routes").get(0).path("steps");
+
+        Map<Integer, double[]> orderedCoordinates = new LinkedHashMap<>();
+        if (stepsNode.isArray()) {
+            for (JsonNode stepNode : stepsNode) {
+                int jobId = stepNode.path("job").asInt();
+                double[] coord = new double[2];
+                coord[0] = stepNode.path("location").get(0).asDouble();
+                coord[1] = stepNode.path("location").get(1).asDouble();
+                orderedCoordinates.put(jobId, coord);
+            }
+        }
+
+        return mapCoordinatesToAssets(orderedCoordinates, assets);
+    }
+
+    /**
+     * Maps the ordered coordinates to their corresponding assets.
+     *
+     * @param orderedCoordinates Map of job ID to coordinates.
+     * @param assets             List of assets to map.
+     * @return List of assets ordered by the provided coordinates.
+     */
+    private List<Asset<?>> mapCoordinatesToAssets(Map<Integer, double[]> orderedCoordinates, List<Asset<?>> assets) {
+        Map<String, Asset<?>> coordinatesToAssetsMap = new HashMap<>();
+        for (Asset<?> asset : assets) {
+            double[] assetCoordinates = extractCoordinatesFromAsset(asset);
+            String key = Arrays.toString(assetCoordinates);
+            coordinatesToAssetsMap.put(key, asset);
+        }
+
+        List<Asset<?>> orderedAssets = new ArrayList<>();
+        for (Map.Entry<Integer, double[]> entry : orderedCoordinates.entrySet()) {
+            String key = Arrays.toString(entry.getValue());
+            if (coordinatesToAssetsMap.containsKey(key)) {
+                Asset<?> asset = coordinatesToAssetsMap.get(key);
+                if (!orderedAssets.contains(asset)) {
+                    orderedAssets.add(asset);
+                }
+            }
+        }
+
+        // Ensure no duplicates and exactly 10 assets
+        Set<Asset<?>> uniqueAssets = new LinkedHashSet<>(orderedAssets);
+        if (uniqueAssets.size() < 10) {
+            assets.stream()
+                    .filter(asset -> !uniqueAssets.contains(asset))
+                    .limit(10 - uniqueAssets.size())
+                    .forEach(uniqueAssets::add);
+        }
+
+        LOG.info("Total assets after mapping: " + uniqueAssets.size());
+        return new ArrayList<>(uniqueAssets);
+    }
+
+    /**
+     * Extracts coordinates from a single asset.
+     *
+     * @param asset The asset to extract coordinates from.
+     * @return Coordinates of the asset in [longitude, latitude] format.
+     */
+    private double[] extractCoordinatesFromAsset(Asset<?> asset) {
+        Optional<Attribute<?>> locationAttribute = asset.getAttributes().get("location");
+        if (locationAttribute.isPresent()) {
+            GeoJSONPoint point = (GeoJSONPoint) locationAttribute.get().getValue().orElse(null);
+            if (point != null) {
+                return new double[]{point.getX(), point.getY()};
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Prints the ordered list of assets.
+     *
+     * @param assets List of ordered assets.
+     */
+    private void printOrderedAssets(List<Asset<?>> assets, String attributeName) {
+        LOG.info("Ordered visitation list:");
+        assets.forEach(asset -> LOG.info("Visit Asset ID: " + asset.getId() + " - "
+                + asset.getName() + " - " + asset.getAttribute(attributeName)));
+    }
+
+    /**
+     * Generates a Google Maps URL for the given list of coordinates.
+     *
+     * @param coordinates List of coordinates to include in the URL.
+     * @return Google Maps URL for the route.
+     */
+    public String generateGoogleMapsURL(List<double[]> coordinates) {
+        StringBuilder url = new StringBuilder("https://www.google.com/maps/dir/");
+        coordinates.forEach(coord -> url.append(coord[1]).append(",").append(coord[0]).append("/"));
+        return url.toString();
+    }
+}
+```
+
+</details>
+
+#### RouteApiClient
+
+The RouteApiClient is responsible for making HTTP requests to the OpenRouteService API.
+<details>
+<summary>View Code</summary>
+
+````java
+public class RouteApiClient implements ContainerService {
+
+    private static final Logger LOG = Logger.getLogger(RouteApiClient.class.getName());
+    private static final String ORS_API_KEY = "5b3ce3597851110001cf6248a3a8675f23d74b67a8e01dfe64f8d363";
+
+    @Override
+    public void init(Container container) throws Exception {
+
+    }
+
+    @Override
+    public void start(Container container) throws Exception {
+
+    }
+
+    @Override
+    public void stop(Container container) throws Exception {
+
+    }
+
+    public String callOpenRouteService(String query) throws IOException, InterruptedException {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("https://api.openrouteservice.org/optimization"))
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + ORS_API_KEY)
+                .POST(HttpRequest.BodyPublishers.ofString(query))
+                .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        String rateLimitRemaining = response.headers().firstValue("X-Ratelimit-Remaining").orElse("unknown");
+        String rateLimitReset = response.headers().firstValue("X-Ratelimit-Reset").orElse("unknown");
+
+        LOG.info("Rate Limit Remaining: " + rateLimitRemaining);
+        LOG.info("Rate Limit Resets At: " + rateLimitReset);
+
+        return response.body();
+    }
+}
+
+````
+
+</details>
+
+#### RouteResponse
+
+The RouteResponse class holds the response data including the Google Maps URL and the ordered list of assets.
+<details>
+<summary>View Code</summary>
+
+```java
+public class RouteResponse {
+    private String googleMapsURL;
+    private List<Asset<?>> orderedAssets;
+
+    public RouteResponse(String googleMapsURL, List<Asset<?>> orderedAssets) {
+        this.googleMapsURL = googleMapsURL;
+        this.orderedAssets = orderedAssets;
+    }
+
+    public String getGoogleMapsURL() {
+        return googleMapsURL;
+    }
+
+    public void setGoogleMapsURL(String googleMapsURL) {
+        this.googleMapsURL = googleMapsURL;
+    }
+
+    public List<Asset<?>> getOrderedAssets() {
+        return orderedAssets;
+    }
+
+    public void setOrderedAssets(List<Asset<?>> orderedAssets) {
+        this.orderedAssets = orderedAssets;
+    }
+}
+```
+
+</details>
 
 [Back to Top](#treeorg-tutorial-setting-up-a-custom-project-with-openremote)
-### Performance Optimization
-*Tips and techniques for optimizing the performance of the TreeOrg project.*
 
+### Creating Custom Widgets
 
 [Back to Top](#treeorg-tutorial-setting-up-a-custom-project-with-openremote)
+
 ## FAQ and Troubleshooting
 
 [Back to Top](#treeorg-tutorial-setting-up-a-custom-project-with-openremote)
