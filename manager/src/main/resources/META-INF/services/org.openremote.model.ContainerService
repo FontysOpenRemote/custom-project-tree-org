@@ -1,3 +1,7 @@
 org.openremote.manager.custom.CustomService
 org.openremote.manager.treeorg.SortingService
+org.openremote.manager.treeorg.RouteOptimizationService
+org.openremote.manager.treeorg.RouteService
+org.openremote.manager.treeorg.RouteApiClient
 org.openremote.manager.treeorg.TreeOrgRestService
+

@@ -11,30 +11,27 @@ public class TreeOrgRestService implements ContainerService {
     private static final Logger LOG = Logger.getLogger(ManagerWebService.class.getName());
     protected AssetStorageService assetStorageService;
     protected SortingService sortingService;
+    protected RouteOptimizationService routeOptimizationService;
+    protected RouteService routeService;
+    protected RouteApiClient routeApiClient;
     @Override
     public void init(Container container) throws Exception {
         ManagerWebService webService = container.getService(ManagerWebService.class);
         assetStorageService = container.getService(AssetStorageService.class);
         sortingService = container.getService(SortingService.class);
+
+        routeService = container.getService(RouteService.class);
+        routeOptimizationService = container.getService(RouteOptimizationService.class);
+        routeApiClient = container.getService(RouteApiClient.class);
         webService.addApiSingleton(new TreeOrgResourceImplementation(sortingService));
+        LOG.info("Registered custom API classes: " + sortingService);
     }
 
-    /**
-     * After initialization, services are started in the order they have been added to the container (if container
-     * started with explicit list of services) otherwise they are started in order of {@link #getPriority}.
-     *
-     * @param container
-     */
     @Override
     public void start(Container container) throws Exception {
 
     }
 
-    /**
-     * When the container is shutting down, it stops all services in the reverse order they were started.
-     *
-     * @param container
-     */
     @Override
     public void stop(Container container) throws Exception {
 

@@ -67,6 +67,7 @@ public class TreeOrgManagerSetup extends ManagerSetup {
             // Generate a random water level between 1 and 10000
             Random random = new Random();
             int waterLevel = 1 + random.nextInt(10000);
+            double soilTemperature = 1 + random.nextInt(100);
 
             treeAsset.getAttributes().getOrCreate(TreeAsset.WATER_LEVEL)
                     .addMeta(new MetaItem<>(RULE_STATE, true)).addMeta(new MetaItem<>(READ_ONLY, false))
@@ -74,7 +75,7 @@ public class TreeOrgManagerSetup extends ManagerSetup {
 
             treeAsset.getAttributes().getOrCreate(TreeAsset.SOIL_TEMPERATURE)
                     .addMeta(new MetaItem<>(RULE_STATE, true)).addMeta(new MetaItem<>(READ_ONLY, false))
-                    .setValue(21.0);  // Assuming a default value of 21.0 for soil temperature
+                    .setValue(soilTemperature);
 
             treeAsset.getAttributes().getOrCreate(TreeAsset.ROUTE_ID)
                     .addMeta(new MetaItem<>(RULE_STATE, true))

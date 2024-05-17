@@ -20,6 +20,24 @@ public class SortingService implements ContainerService {
     private AssetStorageService assetStorageService;
     private static final Logger LOG = Logger.getLogger(ManagerWebService.class.getName());
 
+    @Override
+    public void init(Container container) throws Exception {
+        this.assetStorageService = container.getService(AssetStorageService.class);
+    }
+
+    @Override
+    public void start(Container container) throws Exception {
+        Class<?> assetType = TreeAsset.class;
+        var attributeName = new Attribute<>("waterLevel").getName();
+        findAllAssetsSortedByAttributeAndType(assetType, attributeName);
+    }
+
+    @Override
+    public void stop(Container container) throws Exception {
+        // Any cleanup logic if needed
+    }
+
+
     /**
      * Finds all assets of a specific type sorted by the specified attribute.
      * @param attributeName The name of the attribute to sort on.
@@ -64,37 +82,4 @@ public class SortingService implements ContainerService {
         return assets;
     }
 
-    /**
-     * All services are initialized in the order they have been added to the container (if container started with
-     * explicit list of services) otherwise they are initialized in order of {@link #getPriority}.
-     *
-     * @param container
-     */
-    @Override
-    public void init(Container container) throws Exception {
-        this.assetStorageService = container.getService(AssetStorageService.class);
-    }
-
-    /**
-     * After initialization, services are started in the order they have been added to the container (if container
-     * started with explicit list of services) otherwise they are started in order of {@link #getPriority}.
-     *
-     * @param container
-     */
-    @Override
-    public void start(Container container) throws Exception {
-        Class<?> assetType = TreeAsset.class;
-        var attributeName = new Attribute<>("waterLevel").getName();
-        findAllAssetsSortedByAttributeAndType(assetType, attributeName);
-    }
-
-    /**
-     * When the container is shutting down, it stops all services in the reverse order they were started.
-     *
-     * @param container
-     */
-    @Override
-    public void stop(Container container) throws Exception {
-
-    }
 }
