@@ -653,6 +653,15 @@ To find the most efficient route between assets, TreeOrg aims to leverage OpenSt
 we will create a `RouteOptimizationService` and a `RouteService` to handle route optimization and communication with the
 OpenRouteService API.
 
+> **Beware**: While OpenRouteService (ORS) is very powerful for certain use cases and offers vastly greater parameters
+> and customization options, it may not always be the optimal solution for all scenarios. After evaluating our specific
+> needs, we found that a manual algorithm for route optimization worked better for TreeOrg. This approach provided more
+> control and simplicity for our specific use case, especially in scenarios with fewer points and simpler routing
+> requirements.
+>
+> For more details on the manual route optimization method we implemented, see
+> the [Refactor: Optimizing Routes](#refactor-optimizing-routes) section.
+
 #### RouteOptimizationService
 
 The `RouteOptimizationService` orchestrates the route optimization process by interacting with the `SortingService` to
@@ -1230,6 +1239,97 @@ public class TreeOrgRestService implements ContainerService {
 </details>
 
 [Back to Top](#treeorg-tutorial-setting-up-a-custom-project-with-openremote)
+
+## Refactor: Optimizing Routes
+
+### Initial Approach with External Service
+
+Initially, we integrated with the OpenRouteService (ORS) API to optimize routes for TreeOrg's urban forestry management
+operations. The ORS API provided capabilities to solve the Traveling Salesperson Problem (TSP), which is crucial for
+determining the most efficient route to visit multiple assets (trees) based on their locations. We aimed to leverage ORS
+to automate the route planning process and generate optimized routes for our service personnel.
+
+### Challenges Faced
+
+While ORS offered powerful routing algorithms, we encountered several issues that hindered our progress:
+
+1. **Integration Complexity**: Integrating ORS required complex API interactions, including preparing and sending JSON
+   payloads, handling responses, and managing rate limits imposed by the service.
+2. **Rate Limiting**: The ORS API had strict rate limits, which constrained the number of requests we could make within
+   a given timeframe. This limitation posed challenges for real-time route optimization, especially as the number of
+   assets grew.
+3. **Reliability Concerns**: Reliance on an external service introduced potential points of failure due to network
+   issues, service downtime, or API changes, impacting the reliability of our route optimization process.
+4. **Response Accuracy**: There were discrepancies in the response data, sometimes resulting in suboptimal routes or
+   errors in the generated coordinates, which further complicated our implementation.
+
+### Transition to a Manual Algorithm
+
+Given these challenges, we decided to implement a custom, manual algorithm to optimize routes. This approach aimed to
+reduce dependencies on external services and provide a more controlled, efficient, and reliable solution tailored to our
+specific needs.
+
+## The Closest-Next-Point Algorithm
+
+### Overview
+
+The algorithm we implemented is a heuristic approach to the Traveling Salesperson Problem known as the *
+*Closest-Next-Point Algorithm**. This method prioritizes simplicity and efficiency by iteratively selecting the nearest
+unvisited asset from the current location until all assets have been visited.
+
+### Algorithm Steps
+
+1. **Initialization**:
+   - **Starting Point**: Begin at a fixed starting location, which is the initial position of the service personnel.
+   - **Asset List**: Maintain a list of all assets (trees) to be visited.
+
+2. **Route Construction**:
+   - **Current Position**: Set the starting point as the current position.
+   - **Unvisited Assets**: Create a list of unvisited assets.
+
+3. **Iterative Selection**:
+   - **Find Nearest Asset**: From the current position, identify the nearest unvisited asset based on the geographical
+     distance.
+   - **Update Route**: Move to the nearest asset, mark it as visited, and update the current position.
+   - **Repeat**: Continue the process until all assets have been visited.
+
+4. **Return to Start**:
+   - After visiting all assets, return to the starting point to complete the route.
+
+5. **Generate Navigation Links**:
+   - Compile the sequence of coordinates visited during the route into a Google Maps URL for easy navigation.
+
+### Advantages of the Algorithm
+
+1. **Simplicity**: The algorithm is straightforward to implement and understand, making it easy to debug and maintain.
+2. **Efficiency**: By always moving to the closest unvisited asset, the algorithm minimizes travel distance and time,
+   which is particularly beneficial for real-time applications.
+3. **Control**: Implementing the algorithm internally allows for greater customization and flexibility to adjust to
+   specific requirements and constraints of TreeOrg's operations.
+4. **Independence**: Eliminating the dependency on external services reduces the risk of outages and rate limiting,
+   ensuring more reliable and continuous operation.
+
+### Practical Implementation
+
+In our implementation within the `RouteService`, we:
+
+- Extracted the coordinates of all relevant assets.
+- Applied the closest-next-point logic to determine the optimal visitation sequence.
+- Generated Google Maps URLs to provide navigational aids for service personnel.
+- Updated the asset information with route details to facilitate efficient planning and execution.
+
+This manual algorithm not only improved the efficiency and reliability of our route optimization process but also
+provided us with a tailored solution that could scale with TreeOrg's growing needs without external constraints.
+
+<details>
+<summary>View Refactored Code</summary>
+
+````java
+
+
+````
+
+</details>
 
 ### Creating Custom Widgets
 

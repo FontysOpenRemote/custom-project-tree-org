@@ -1,9 +1,5 @@
 package org.openremote.manager.treeorg;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.openremote.manager.asset.AssetStorageService;
 import org.openremote.model.Container;
 import org.openremote.model.ContainerService;
@@ -13,35 +9,29 @@ import org.openremote.model.geo.GeoJSONPoint;
 import org.openremote.model.query.AssetQuery;
 import org.openremote.model.treeorg.TreeAsset;
 
-import java.io.IOException;
 import java.util.*;
 import java.util.logging.Logger;
 
 import static org.openremote.model.asset.Asset.NOTES;
+
 public class RouteService implements ContainerService {
 
     private AssetStorageService assetStorageService;
     private static final Logger LOG = Logger.getLogger(RouteService.class.getName());
-    private RouteApiClient routeApiClient;
-    private Map<Integer, String> jobIdToAssetIdMap = new HashMap<>();
-
     public RouteService() {
     }
 
     @Override
     public void init(Container container) throws Exception {
         this.assetStorageService = container.getService(AssetStorageService.class);
-        this.routeApiClient = container.getService(RouteApiClient.class);
     }
 
     @Override
     public void start(Container container) throws Exception {
-        // Any start logic if needed
     }
 
     @Override
     public void stop(Container container) throws Exception {
-        // Any cleanup logic if needed
     }
 
     /**
@@ -49,74 +39,73 @@ public class RouteService implements ContainerService {
      *
      * @param sortedAssets  A list of sorted assets to optimize the route for.
      * @param attributeName The name of the attribute used for sorting.
-     * @return A RouteResponse containing the Google Maps URL for the optimized route and the ordered assets.
+     * @return A RouteResponse containing the Google Maps URLs for the optimized routes and the ordered assets.
      */
     public RouteResponse optimizeRouteForSortedAssets(List<Asset<?>> sortedAssets, String attributeName) {
         List<double[]> coordinates = extractCoordinates(sortedAssets);
-
         double[] startingPosition = {5.453487298268298, 51.45081456926727};
-        String tspQuery = prepareTSPQuery(coordinates, sortedAssets, startingPosition);
-        try {
-            String routeResponse = routeApiClient.callOpenRouteService(tspQuery);
-            LOG.info("Route Response: " + routeResponse);
-            List<Asset<?>> orderedAssets = orderAssetsByRouteResponse(routeResponse, sortedAssets);
-            updateRouteIds(orderedAssets);
-            printOrderedAssets(orderedAssets, attributeName);
 
-            List<double[]> routeCoordinates = extractCoordinates(orderedAssets);
-            routeCoordinates.add(0, startingPosition); // Add starting position at the beginning
-            routeCoordinates.add(startingPosition); // Add starting position at the end
+        // Generate the new closest-next-point route
+        List<double[]> newOptimalRoute = findOptimalRoute(coordinates, startingPosition);
+        String newGoogleMapsURL = generateGoogleMapsURL(newOptimalRoute);
+        LOG.info("View new route on Google Maps: " + newGoogleMapsURL);
 
-            String googleMapsURL = generateGoogleMapsURL(routeCoordinates);
-            LOG.info("View route on Google Maps: " + googleMapsURL);
+        // Update the parent asset with the Google Maps URL
+        updateParentAssetWithGoogleMapsURL(newGoogleMapsURL, sortedAssets);
 
-            updateParentAssetWithGoogleMapsURL(googleMapsURL, sortedAssets);
+        // Update route IDs for the assets
+        updateRouteIds(sortedAssets);
 
-            return new RouteResponse(googleMapsURL, orderedAssets);
-        } catch (IOException | InterruptedException e) {
-            LOG.severe("Failed to call OpenRouteService: " + e.getMessage());
-            return null;
-        }
+        return new RouteResponse(newGoogleMapsURL, sortedAssets);
     }
-
 
     /**
-     * Prepares the TSP (Travelling Salesperson Problem) query for the OpenRouteService API.
+     * Finds the optimal route using the closest-next-point algorithm.
      *
-     * @param coordinates      A list of coordinates for the assets in [longitude, latitude] format.
-     * @param sortedSensors    A list of sorted assets that represent the sensors.
-     * @param startingPosition The starting position for the route in [longitude, latitude] format.
-     * @return A JSON string representing the TSP query.
+     * @param coordinates      List of coordinates.
+     * @param startingPosition Starting position.
+     * @return List of coordinates representing the optimal route.
      */
-    private String prepareTSPQuery(List<double[]> coordinates, List<Asset<?>> sortedSensors, double[] startingPosition) {
-        ObjectMapper mapper = new ObjectMapper();
-        ObjectNode payload = mapper.createObjectNode();
-        ArrayNode jobs = mapper.createArrayNode();
-        ArrayNode vehicles = mapper.createArrayNode();
-
-        ObjectNode vehicle = mapper.createObjectNode();
-        vehicle.put("id", 1);
-        vehicle.set("start", mapper.createArrayNode().add(startingPosition[0]).add(startingPosition[1]));
-        vehicle.put("return_to_depot", true);
-        vehicle.put("profile", "driving-car");
-        vehicles.add(vehicle);
+    private List<double[]> findOptimalRoute(List<double[]> coordinates, double[] startingPosition) {
+        List<double[]> route = new ArrayList<>();
+        boolean[] visited = new boolean[coordinates.size()];
+        double[] currentPosition = startingPosition;
+        route.add(currentPosition);
 
         for (int i = 0; i < coordinates.size(); i++) {
-            ObjectNode job = mapper.createObjectNode();
-            int jobId = i + 1;
-            job.put("id", jobId); // Use a unique integer as job ID
-            job.set("location", mapper.createArrayNode().add(coordinates.get(i)[0]).add(coordinates.get(i)[1]));
-            jobs.add(job);
-
-            // Map job ID to original asset ID for reference
-            jobIdToAssetIdMap.put(jobId, sortedSensors.get(i).getId());
+            double minDistance = Double.MAX_VALUE;
+            int closestPointIndex = -1;
+            for (int j = 0; j < coordinates.size(); j++) {
+                if (!visited[j]) {
+                    double distance = calculateDistance(currentPosition, coordinates.get(j));
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        closestPointIndex = j;
+                    }
+                }
+            }
+            if (closestPointIndex != -1) {
+                visited[closestPointIndex] = true;
+                currentPosition = coordinates.get(closestPointIndex);
+                route.add(currentPosition);
+            }
         }
-
-        payload.set("vehicles", vehicles);
-        payload.set("jobs", jobs);
-        return payload.toString();
+        route.add(startingPosition); // Return to start
+        return route;
     }
 
+    /**
+     * Calculates the distance between two coordinates.
+     *
+     * @param point1 First point.
+     * @param point2 Second point.
+     * @return Distance between the two points.
+     */
+    private double calculateDistance(double[] point1, double[] point2) {
+        double dx = point1[0] - point2[0];
+        double dy = point1[1] - point2[1];
+        return Math.sqrt(dx * dx + dy * dy);
+    }
 
     /**
      * Updates the Google Maps URL attribute for the relevant assets and clears it for others.
@@ -182,7 +171,6 @@ public class RouteService implements ContainerService {
         }
     }
 
-
     /**
      * Extracts coordinates from a list of assets.
      *
@@ -201,92 +189,6 @@ public class RouteService implements ContainerService {
             });
         });
         return coordinates;
-    }
-
-    /**
-     * Orders assets based on the route response from the OpenRouteService API.
-     *
-     * @param routeResponse JSON response from the OpenRouteService API.
-     * @param assets        List of assets to order.
-     * @return Ordered list of assets based on the optimized route.
-     * @throws IOException throws exception
-     */
-    private List<Asset<?>> orderAssetsByRouteResponse(String routeResponse, List<Asset<?>> assets) throws IOException {
-        ObjectMapper mapper = new ObjectMapper();
-        JsonNode rootNode = mapper.readTree(routeResponse);
-
-        LOG.info("Root Node: " + rootNode.toPrettyString());
-
-        JsonNode stepsNode = rootNode.path("routes").get(0).path("steps");
-
-        Map<Integer, double[]> orderedCoordinates = new LinkedHashMap<>();
-        if (stepsNode.isArray()) {
-            for (JsonNode stepNode : stepsNode) {
-                int jobId = stepNode.path("job").asInt();
-                double[] coord = new double[2];
-                coord[0] = stepNode.path("location").get(0).asDouble();
-                coord[1] = stepNode.path("location").get(1).asDouble();
-                orderedCoordinates.put(jobId, coord);
-            }
-        }
-
-        return mapCoordinatesToAssets(orderedCoordinates, assets);
-    }
-
-    /**
-     * Maps the ordered coordinates to their corresponding assets.
-     *
-     * @param orderedCoordinates Map of job ID to coordinates.
-     * @param assets             List of assets to map.
-     * @return List of assets ordered by the provided coordinates.
-     */
-    private List<Asset<?>> mapCoordinatesToAssets(Map<Integer, double[]> orderedCoordinates, List<Asset<?>> assets) {
-        Map<String, Asset<?>> coordinatesToAssetsMap = new HashMap<>();
-        for (Asset<?> asset : assets) {
-            double[] assetCoordinates = extractCoordinatesFromAsset(asset);
-            String key = Arrays.toString(assetCoordinates);
-            coordinatesToAssetsMap.put(key, asset);
-        }
-
-        List<Asset<?>> orderedAssets = new ArrayList<>();
-        for (Map.Entry<Integer, double[]> entry : orderedCoordinates.entrySet()) {
-            String key = Arrays.toString(entry.getValue());
-            if (coordinatesToAssetsMap.containsKey(key)) {
-                Asset<?> asset = coordinatesToAssetsMap.get(key);
-                if (!orderedAssets.contains(asset)) {
-                    orderedAssets.add(asset);
-                }
-            }
-        }
-
-        // Ensure no duplicates and exactly 10 assets
-        Set<Asset<?>> uniqueAssets = new LinkedHashSet<>(orderedAssets);
-        if (uniqueAssets.size() < 10) {
-            assets.stream()
-                    .filter(asset -> !uniqueAssets.contains(asset))
-                    .limit(10 - uniqueAssets.size())
-                    .forEach(uniqueAssets::add);
-        }
-
-        LOG.info("Total assets after mapping: " + uniqueAssets.size());
-        return new ArrayList<>(uniqueAssets);
-    }
-
-    /**
-     * Extracts coordinates from a single asset.
-     *
-     * @param asset The asset to extract coordinates from.
-     * @return Coordinates of the asset in [longitude, latitude] format.
-     */
-    private double[] extractCoordinatesFromAsset(Asset<?> asset) {
-        Optional<Attribute<?>> locationAttribute = asset.getAttributes().get("location");
-        if (locationAttribute.isPresent()) {
-            GeoJSONPoint point = (GeoJSONPoint) locationAttribute.get().getValue().orElse(null);
-            if (point != null) {
-                return new double[]{point.getX(), point.getY()};
-            }
-        }
-        return null;
     }
 
     /**
@@ -312,4 +214,3 @@ public class RouteService implements ContainerService {
         return url.toString();
     }
 }
-

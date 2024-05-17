@@ -17,15 +17,7 @@ public class RouteResponse {
         return googleMapsURL;
     }
 
-    public void setGoogleMapsURL(String googleMapsURL) {
-        this.googleMapsURL = googleMapsURL;
-    }
-
     public List<Asset<?>> getOrderedAssets() {
         return orderedAssets;
-    }
-
-    public void setOrderedAssets(List<Asset<?>> orderedAssets) {
-        this.orderedAssets = orderedAssets;
     }
 }

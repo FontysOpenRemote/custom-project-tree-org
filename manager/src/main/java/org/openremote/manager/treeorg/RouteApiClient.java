@@ -13,7 +13,7 @@ import java.util.logging.Logger;
 public class RouteApiClient implements ContainerService {
 
     private static final Logger LOG = Logger.getLogger(RouteApiClient.class.getName());
-    private static final String ORS_API_KEY = "5b3ce3597851110001cf6248a3a8675f23d74b67a8e01dfe64f8d363";
+    private static final String ORS_API_KEY = "YOUR_API_KEY";
 
     @Override
     public void init(Container container) throws Exception {
