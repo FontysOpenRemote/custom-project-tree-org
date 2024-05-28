@@ -3,7 +3,6 @@ package org.openremote.manager.treeorg;
 import org.openremote.model.Container;
 import org.openremote.model.ContainerService;
 import org.openremote.model.asset.Asset;
-import org.openremote.model.treeorg.TreeAsset;
 
 import java.util.Collections;
 import java.util.List;
@@ -23,8 +22,8 @@ public class RouteOptimizationService implements ContainerService {
     @Override
     public void start(Container container) {
         // Perform initial optimization
-        optimizeRouteForSensors(TreeAsset.class, "waterLevel");
-        optimizeRouteForSensors(TreeAsset.class, "soilTemperature");
+        //optimizeRouteForSensors(TreeAsset.class, "waterLevel");
+        //optimizeRouteForSensors(TreeAsset.class, "soilTemperature");
     }
 
     @Override

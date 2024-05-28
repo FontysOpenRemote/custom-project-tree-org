@@ -1274,8 +1274,8 @@ specific needs.
 
 ### Overview
 
-The algorithm we implemented is a heuristic approach to the Traveling Salesperson Problem known as the *
-*Closest-Next-Point Algorithm**. This method prioritizes simplicity and efficiency by iteratively selecting the nearest
+The algorithm we implemented is a heuristic approach to the Traveling Salesperson Problem known as the
+*Closest-Next-Point Algorithm*. This method prioritizes simplicity and efficiency by iteratively selecting the nearest
 unvisited asset from the current location until all assets have been visited.
 
 ### Algorithm Steps
